@@ -1,0 +1,153 @@
+.kpi-row {
+  display: grid;
+  flex: none;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
+.kpi-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 14px 16px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--transition-fast), transform var(--transition-fast), border-color var(--transition-fast);
+  overflow: hidden;
+}
+
+.kpi-tile:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+  border-color: var(--border-strong);
+}
+
+.kpi-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.kpi-value {
+  margin-top: 6px;
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  color: var(--text-primary);
+}
+
+.kpi-value-good {
+  color: var(--good);
+}
+
+.kpi-value-critical {
+  color: var(--critical);
+}
+
+.kpi-sub {
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 1300px) {
+  .kpi-row {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+}
+
+.kpi-toggle {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .kpi-toggle {
+    display: inline-flex;
+    align-self: flex-start;
+    align-items: center;
+    gap: 5px;
+    flex: none;
+    height: 32px;
+    min-height: 32px;
+    padding: 0 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-pill);
+    background: var(--surface-1);
+    color: var(--text-secondary);
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+
+  .kpi-toggle-caret {
+    transition: transform 0.2s ease;
+  }
+
+  .kpi-toggle.is-open {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .kpi-toggle.is-open .kpi-toggle-caret {
+    transform: rotate(180deg);
+  }
+
+  .kpi-row.is-collapsed {
+    display: none;
+  }
+
+  .kpi-row:not(.is-collapsed) {
+    animation: kpi-reveal 0.22s ease-out;
+  }
+}
+
+@keyframes kpi-reveal {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 640px) and (prefers-reduced-motion: reduce) {
+  .kpi-row:not(.is-collapsed) {
+    animation: none;
+  }
+}
+/* Phones: three compact tiles per row. */
+@media (max-width: 640px) {
+  .kpi-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .kpi-tile {
+    padding: 8px 9px;
+    border-radius: var(--radius-sm);
+  }
+
+  .kpi-label {
+    overflow: hidden;
+    font-size: 9px;
+    letter-spacing: 0.03em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .kpi-value {
+    margin-top: 3px;
+    font-size: 18px;
+  }
+
+  .kpi-sub {
+    margin-top: 2px;
+    font-size: 9.5px;
+  }
+}

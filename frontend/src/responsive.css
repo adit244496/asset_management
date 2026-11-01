@@ -1,0 +1,352 @@
+/* Phones: up to 640px. Tablets: 641px to 1024px. Nothing here applies above 1024px. */
+
+@media (max-width: 1024px) {
+  .page-scroll,
+  .page-fixed {
+    padding: 14px 16px 28px;
+  }
+
+  .page-card {
+    padding: 18px;
+  }
+
+  .modal-overlay {
+    padding: 16px;
+  }
+
+  .modal {
+    max-height: calc(100dvh - 32px);
+  }
+}
+
+/* Report: on narrow screens the whole table scrolls sideways as one, actions included,
+   and the page itself scrolls down instead of a box inside it. */
+@media (max-width: 1024px) {
+  .report-table-wrap {
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+
+  table.report-table td.actions-cell,
+  table.report-table th.actions-col {
+    position: static;
+  }
+
+  table.report-table thead th,
+  table.report-table thead tr.head-filters th {
+    position: static;
+  }
+}
+
+@media (max-width: 1024px) and (pointer: coarse) {
+  .btn-primary,
+  .btn-secondary,
+  .btn-danger {
+    min-height: 40px;
+  }
+
+  .btn-ghost {
+    min-height: 36px;
+  }
+
+  .icon-btn {
+    min-width: 36px;
+    min-height: 36px;
+  }
+
+  .field-input,
+  select.field-input {
+    height: 38px;
+  }
+
+  textarea.field-input {
+    min-height: 38px;
+  }
+
+  input[type='checkbox'],
+  input[type='radio'] {
+    width: 18px;
+    height: 18px;
+  }
+
+  .modal-close {
+    padding: 9px;
+  }
+}
+
+@media (max-width: 640px) {
+  body {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  .page-scroll,
+  .page-fixed {
+    padding: 10px 10px calc(24px + env(safe-area-inset-bottom));
+  }
+
+  .page-card {
+    padding: 14px 12px;
+    border-radius: var(--radius-md);
+  }
+
+  .page-header {
+    margin-bottom: 12px;
+  }
+
+  .page-header h1 {
+    font-size: 19px;
+  }
+
+  .panel {
+    padding: 14px;
+  }
+
+  /* 16px stops iOS zooming into a field when it is tapped. */
+  .field-input,
+  select.field-input,
+  textarea.field-input,
+  input[type='text'],
+  input[type='search'],
+  input[type='email'],
+  input[type='number'],
+  input[type='password'],
+  input[type='date'],
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  .field-input,
+  select.field-input {
+    height: 42px;
+  }
+
+  .field label,
+  .field-label {
+    font-size: 12px;
+  }
+
+  .field-error {
+    font-size: 11.5px;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .form-actions {
+    flex-wrap: wrap;
+  }
+
+  .btn-primary,
+  .btn-secondary,
+  .btn-danger {
+    min-height: 42px;
+    font-size: 14px;
+  }
+
+  .btn-ghost {
+    min-height: 38px;
+    font-size: 13.5px;
+  }
+
+  .icon-btn {
+    min-width: 38px;
+    min-height: 38px;
+  }
+
+  .banner {
+    font-size: 13.5px;
+  }
+
+  /* Pop-up windows take the whole screen; Save and Cancel stay at the bottom. */
+  .modal-overlay {
+    align-items: stretch;
+    padding: 0;
+  }
+
+  .modal {
+    width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    border: none;
+    border-radius: 0;
+  }
+
+  .modal-head {
+    padding: calc(12px + env(safe-area-inset-top)) 14px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .modal-head h2 {
+    font-size: 17px;
+  }
+
+  .modal-body {
+    flex: 1;
+    padding: 12px 14px 18px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .modal-foot {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+    background: var(--surface-1);
+  }
+
+  .modal-foot > button {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  table.data-table {
+    font-size: 13px;
+  }
+
+  table.data-table th,
+  table.data-table td {
+    padding: 10px 10px;
+  }
+}
+
+/* Press and hold a row for 1 s to select it (Report, Verification, History). Touch screens only. */
+@media (pointer: coarse) {
+  .longpress-row {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  table tbody tr.longpress-row.row-pressing td,
+  table tbody tr.longpress-row.row-pressing td.actions-cell {
+    animation: longpress-fill 1s linear forwards;
+  }
+
+  table tbody tr.longpress-row.row-selected td,
+  table tbody tr.longpress-row.row-selected td.actions-cell {
+    background: var(--accent-soft-strong);
+  }
+
+  table tbody tr.longpress-row.row-selected td:first-child {
+    box-shadow: inset 4px 0 0 var(--accent);
+  }
+}
+
+@keyframes longpress-fill {
+  from { background-color: transparent; }
+  to { background-color: var(--accent-soft-strong); }
+}
+/* The moment a hold selects a row: a bright spike with a glare sweeping across, settling into the selected tint. */
+@media (pointer: coarse) {
+  table tbody tr.longpress-row.row-flash td,
+  table tbody tr.longpress-row.row-flash td.actions-cell {
+    background-image: linear-gradient(100deg, transparent 0%, transparent 38%,
+      rgba(255, 255, 255, 0.55) 50%, transparent 62%, transparent 100%);
+    background-size: 220vw 100%;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+    animation: row-spike 0.85s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+
+  table tbody tr.longpress-row.row-flash td:first-child {
+    animation: row-spike 0.85s cubic-bezier(0.2, 0.8, 0.2, 1) both, row-spike-edge 0.85s ease-out both;
+  }
+}
+
+@keyframes row-spike {
+  0% {
+    background-color: color-mix(in srgb, var(--accent) 75%, transparent);
+    background-position: 120vw 0;
+  }
+  18% {
+    background-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  }
+  70% {
+    background-position: -120vw 0;
+  }
+  100% {
+    background-color: var(--accent-soft-strong);
+    background-position: -120vw 0;
+  }
+}
+
+@keyframes row-spike-edge {
+  0% { box-shadow: inset 10px 0 0 var(--accent), 0 0 18px var(--accent); }
+  100% { box-shadow: inset 4px 0 0 var(--accent); }
+}
+
+@media (pointer: coarse) and (prefers-reduced-motion: reduce) {
+  table tbody tr.longpress-row.row-flash td,
+  table tbody tr.longpress-row.row-flash td.actions-cell,
+  table tbody tr.longpress-row.row-flash td:first-child {
+    background-image: none;
+    animation-duration: 0.3s;
+  }
+}
+/* Pinned cells (Verification's Decide, the Report's Actions) stay solid when their row is tinted, so the
+   list scrolling underneath never shows through. The tint is drawn as an inner shadow over the solid fill. */
+@media (pointer: coarse) {
+  table tbody tr.longpress-row.row-selected td.verify-actions-col,
+  table tbody tr.longpress-row.row-pressing td.verify-actions-col,
+  table tbody tr.longpress-row.row-flash td.verify-actions-col,
+  table tbody tr.longpress-row.row-selected td.actions-cell,
+  table tbody tr.longpress-row.row-pressing td.actions-cell,
+  table tbody tr.longpress-row.row-flash td.actions-cell {
+    background: var(--surface-1);
+    background-image: none;
+  }
+
+  table tbody tr.longpress-row.row-selected td.verify-actions-col {
+    box-shadow: inset 1px 0 0 var(--border), inset 0 0 0 100vmax var(--accent-soft-strong);
+  }
+
+  table tbody tr.longpress-row.row-selected td.actions-cell {
+    box-shadow: inset 4px 0 0 var(--accent), inset 0 0 0 100vmax var(--accent-soft-strong);
+  }
+
+  table tbody tr.longpress-row.row-pressing td.verify-actions-col,
+  table tbody tr.longpress-row.row-pressing td.actions-cell {
+    animation: longpress-fill-pinned 1s linear forwards;
+  }
+
+  table tbody tr.longpress-row.row-flash td.verify-actions-col,
+  table tbody tr.longpress-row.row-flash td.actions-cell {
+    animation: row-spike-pinned 0.85s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+}
+
+@keyframes longpress-fill-pinned {
+  from { box-shadow: inset 0 0 0 100vmax transparent; }
+  to { box-shadow: inset 0 0 0 100vmax var(--accent-soft-strong); }
+}
+
+@keyframes row-spike-pinned {
+  0% { box-shadow: inset 0 0 0 100vmax color-mix(in srgb, var(--accent) 60%, var(--surface-1)); }
+  100% { box-shadow: inset 0 0 0 100vmax var(--accent-soft-strong); }
+}
+/* Size to the visible screen. On phones 100vh counts the space behind the browser's address bar, which made
+   the whole app scroll by that much; 100dvh follows the bar as it shows and hides. Same as 100vh on desktop. */
+@supports (height: 100dvh) {
+  .app-shell,
+  .app-boot {
+    height: 100dvh;
+  }
+
+  .login-container,
+  .setpw-page,
+  .approve-page {
+    min-height: 100dvh;
+  }
+}
+
+@media (max-width: 1024px) {
+  .page-scroll,
+  .dashboard-grid {
+    overscroll-behavior-y: contain;
+  }
+}

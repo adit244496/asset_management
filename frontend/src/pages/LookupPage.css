@@ -1,0 +1,192 @@
+.lookup-page .page-header h1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lookup-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+}
+
+.lookup-box:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+.lookup-icon {
+  flex: none;
+  color: var(--text-muted);
+}
+
+.lookup-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+  font-size: 17px;
+  letter-spacing: 0.04em;
+  resize: none;
+  max-height: 3.4em;
+  line-height: 1.7;
+}
+
+.lookup-input:focus {
+  outline: none;
+}
+
+.lookup-clear,
+.lookup-camera {
+  flex: none;
+}
+
+.lookup-clear {
+  display: flex;
+  padding: 3px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.lookup-clear:hover {
+  color: var(--text-primary);
+}
+
+.lookup-camera {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lookup-camera.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.lookup-status {
+  padding: 10px 0;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.lookup-matched {
+  margin-bottom: 8px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.lookup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.lookup-actions .btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lookup-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 34px 16px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.lookup-empty p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.lookup-empty-note {
+  max-width: 460px;
+  font-size: 12px !important;
+}
+
+.lookup-many {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  overflow: hidden;
+}
+
+.lookup-many-head {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.lookup-match {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lookup-match:last-child {
+  border-bottom: none;
+}
+
+.lookup-match:hover {
+  background: var(--surface-sunken);
+}
+
+.lookup-match-id {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--accent);
+}
+
+.lookup-match-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.lookup-match-meta {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.lookup-match-reg {
+  flex: none;
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}

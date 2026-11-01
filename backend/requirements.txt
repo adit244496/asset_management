@@ -1,0 +1,28 @@
+Flask>=3.0,<4.0
+Flask-CORS>=4.0,<5.0
+sqlalchemy>=2.0,<3.0
+pg8000>=1.30
+python-dotenv>=1.0
+PyJWT>=2.8
+passlib[bcrypt]>=1.7.4
+bcrypt>=4.0.1,<4.1
+
+# QR codes for asset labels (app/qrcodes.py). Pure Python, no native
+# dependency -- encoding a QR by hand means Reed-Solomon, masking and
+# format-info bit packing, which is not worth owning.
+segno>=1.6
+
+# The in-app assistant's AI half (app/assistant/). ASSISTANT_PROVIDER picks
+# which one is used: Google Gemini (the default, needs GEMINI_API_KEY) or
+# Anthropic Claude (needs ANTHROPIC_API_KEY). Without a key the assistant
+# offers its Guide only; without either package, likewise.
+google-genai>=2.25,<3.0
+anthropic>=1.9,<2.0
+
+pytest>=8.0
+
+# Production WSGI server. Windows is the deployment target, so waitress:
+# gunicorn is POSIX-only and will not run here. (gunicorn used to be listed
+# for a Linux/Docker path; there is no container step any more, and the
+# marker meant it was never installed on Windows regardless.)
+waitress>=3.0

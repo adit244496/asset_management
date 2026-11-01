@@ -1,0 +1,229 @@
+.dashboard-page {
+  gap: 12px;
+}
+
+.dash-header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 2px 0 4px;
+}
+
+.dash-title {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.dash-header h1 {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--text-primary);
+}
+
+.dash-header .dash-sub {
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.filters-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.filters-bar label {
+  margin-right: -4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.dash-select {
+  min-width: 140px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  color: var(--text-primary);
+  font-size: 12px;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.dash-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-ring);
+}
+
+.dashboard-grid {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: 12px;
+}
+
+.dashboard-row {
+  display: grid;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+
+.dashboard-row-top {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.dashboard-row-bottom {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.dashboard-row-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.dashboard-row > .chart-card {
+  min-width: 0;
+  height: 100%;
+}
+
+.dashboard-empty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 30px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.dashboard-empty h2 {
+  font-size: 17px;
+  color: var(--text-primary);
+}
+
+.dashboard-empty p {
+  max-width: 440px;
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+@media (max-width: 1300px) {
+  .dashboard-grid {
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+
+  .dashboard-row {
+    flex: none;
+  }
+
+  .dashboard-row-top {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    grid-auto-rows: 240px;
+  }
+
+  .dashboard-row-bottom {
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    grid-auto-rows: 240px;
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboard-row-top,
+  .dashboard-row-bottom {
+    grid-template-columns: 1fr;
+    grid-auto-rows: 230px;
+  }
+}
+
+/* Phones: keep the pinned top (title, register switch, filters, KPIs) short so the charts always have room. */
+@media (max-width: 640px) {
+  .dashboard-page {
+    gap: 8px;
+  }
+
+  .dash-header {
+    gap: 8px;
+    padding: 0;
+  }
+
+  .dash-title {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .dash-header h1 {
+    font-size: 18px;
+    white-space: nowrap;
+  }
+
+  .dash-header .dash-sub {
+    display: none;
+  }
+
+  .dash-title .reg-toggle {
+    display: flex;
+    width: 100%;
+  }
+
+  .dash-title .reg-option {
+    flex: 1 1 0;
+    justify-content: center;
+    gap: 4px;
+    padding: 5px 4px;
+    font-size: 12px;
+  }
+
+  .filters-bar {
+    flex-wrap: nowrap;
+    width: 100%;
+    gap: 6px;
+  }
+
+  .filters-bar label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .dash-select {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 36px;
+    padding: 4px 6px;
+  }
+
+  .filters-bar .btn-ghost {
+    flex: none;
+    height: 36px;
+    min-height: 36px;
+    padding: 0 9px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .dashboard-row-top,
+  .dashboard-row-bottom {
+    grid-auto-rows: 220px;
+  }
+}

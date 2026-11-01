@@ -1,0 +1,159 @@
+.act-report {
+  display: none;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .act-report,
+  .act-report * {
+    visibility: visible;
+  }
+
+  .act-report {
+    display: block;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    padding: 0;
+    background: #fff;
+    font-family: "Segoe UI", Arial, sans-serif;
+    font-size: 9pt;
+    line-height: 1.35;
+  }
+
+  .act-report,
+  .act-report * {
+    color: #000;
+    border-color: #bbb;
+    box-shadow: none;
+    text-shadow: none;
+  }
+
+  .act-report * {
+    background: transparent;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  @page {
+    size: A4 landscape;
+    margin: 12mm 10mm;
+  }
+
+  .act-report-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding-bottom: 6pt;
+    border-bottom: 1.5pt solid #000;
+    border-bottom-color: #000;
+  }
+
+  .act-report-kicker {
+    font-size: 8pt;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #444;
+  }
+
+  .act-report h1 {
+    margin: 2pt 0 0;
+    font-size: 16pt;
+    font-weight: 700;
+    color: #000;
+  }
+
+  .act-report-count {
+    font-size: 11pt;
+    font-weight: 700;
+  }
+
+  .act-report-facts {
+    width: 100%;
+    margin-top: 8pt;
+    border-collapse: collapse;
+    font-size: 8.5pt;
+  }
+
+  .act-report-facts th {
+    width: 9%;
+    padding: 2pt 6pt 2pt 0;
+    text-align: left;
+    font-weight: 600;
+    color: #444;
+    white-space: nowrap;
+  }
+
+  .act-report-facts td {
+    padding: 2pt 12pt 2pt 0;
+  }
+
+  .act-report-empty {
+    margin: 12pt 0;
+    font-size: 9.5pt;
+    color: #333;
+  }
+
+  .act-report-table {
+    width: 100%;
+    margin-top: 8pt;
+    border-collapse: collapse;
+    font-size: 8pt;
+  }
+
+  .act-report-table thead th {
+    padding: 4pt;
+    text-align: left;
+    font-size: 7.5pt;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    border-bottom: 1pt solid #000;
+    border-bottom-color: #000;
+  }
+
+  .act-report-table thead {
+    display: table-header-group;
+  }
+
+  .act-report-table td {
+    padding: 2.5pt 4pt;
+    vertical-align: top;
+    border-top: 0.5pt solid #ddd;
+    overflow-wrap: anywhere;
+  }
+
+  .act-report-table tbody tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .act-report-notable td {
+    font-weight: 700;
+  }
+
+  .act-report-notable .c-outcome::before {
+    content: "● ";
+  }
+
+  .act-report-table .c-when { width: 13%; white-space: nowrap; }
+  .act-report-table .c-who { width: 11%; }
+  .act-report-table .c-role { width: 10%; color: #444; }
+  .act-report-table .c-area { width: 9%; color: #444; }
+  .act-report-table .c-what { width: 48%; }
+  .act-report-table .c-outcome { width: 9%; }
+
+  .act-report-foot {
+    margin-top: 10pt;
+    padding-top: 5pt;
+    border-top: 0.5pt solid #bbb;
+    font-size: 7pt;
+    color: #444;
+  }
+}

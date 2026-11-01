@@ -1,0 +1,98 @@
+.transfer-from {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 11px;
+  margin-bottom: 14px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2, var(--bg));
+  border: 1px solid var(--border);
+}
+
+.transfer-from-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.transfer-from-value {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.sw-move-qty {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sw-move-qty .field-input {
+  width: 110px;
+}
+.sw-move-of {
+  font-size: 13px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.sw-move-plan {
+  margin-top: 4px;
+  line-height: 1.5;
+}
+
+.transfer-mode-note {
+  margin: 0 0 14px;
+  padding: 8px 11px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--accent);
+  background: var(--accent-soft, transparent);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.transfer-widen {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.transfer-widen:hover {
+  opacity: 0.8;
+}
+
+.transfer-warning {
+  margin: 6px 0 0;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--warning, var(--critical));
+  background: var(--warning-soft, var(--critical-soft));
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.transfer-filled {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.transfer-summary {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 16px;
+  padding-top: 13px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.transfer-summary strong {
+  color: var(--text-primary);
+}

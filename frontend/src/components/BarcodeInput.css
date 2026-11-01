@@ -1,0 +1,51 @@
+.barcode-input-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.barcode-input-row .field-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.barcode-scan-btn {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-right: 0;
+  padding: 0 8px;
+  height: 30px;
+  font-size: 11.5px;
+  border-radius: var(--radius-sm);
+}
+
+.barcode-scan-btn.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.barcode-input.armed .field-input {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-ring);
+}
+
+.barcode-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 3px;
+  font-size: 10.5px;
+}
+
+.barcode-hint-armed {
+  color: var(--accent);
+}
+
+.barcode-hint-ok {
+  color: var(--good);
+}

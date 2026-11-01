@@ -1,0 +1,58 @@
+.multiselect {
+  position: relative;
+  width: 100%;
+}
+
+.multiselect-btn {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-align: left;
+}
+
+.multiselect-btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.multiselect-panel {
+  position: fixed;
+  z-index: 60;
+  overflow-y: auto;
+  padding: 6px;
+  background: var(--surface-1);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+}
+
+.multiselect-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.multiselect-option:hover {
+  background: var(--surface-sunken);
+}
+
+.multiselect-empty {
+  padding: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.multiselect-empty-value {
+  color: var(--text-muted);
+  font-style: italic;
+}

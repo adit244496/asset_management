@@ -1,0 +1,161 @@
+.hist-report {
+  display: none;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .hist-report,
+  .hist-report * {
+    visibility: visible;
+  }
+
+  .hist-report {
+    display: block;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    padding: 0;
+    background: #fff;
+    font-family: "Segoe UI", Arial, sans-serif;
+    font-size: 9.5pt;
+    line-height: 1.4;
+  }
+
+  .hist-report,
+  .hist-report * {
+    color: #000;
+    border-color: #bbb;
+    box-shadow: none;
+    text-shadow: none;
+  }
+
+  .hist-report * {
+    background: transparent;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 14mm 12mm;
+  }
+
+  .hist-report-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding-bottom: 6pt;
+    border-bottom: 1.5pt solid #000;
+    border-bottom-color: #000;
+  }
+
+  .hist-report-kicker {
+    font-size: 8pt;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #444;
+  }
+
+  .hist-report h1 {
+    margin: 2pt 0 0;
+    font-size: 16pt;
+    font-weight: 700;
+    color: #000;
+  }
+
+  .hist-report-id {
+    font-family: "Consolas", "Courier New", monospace;
+    font-size: 14pt;
+    font-weight: 700;
+  }
+
+  .hist-report-facts {
+    width: 100%;
+    margin-top: 8pt;
+    border-collapse: collapse;
+    font-size: 9pt;
+  }
+
+  .hist-report-facts th {
+    width: 15%;
+    padding: 2pt 6pt 2pt 0;
+    text-align: left;
+    font-weight: 600;
+    color: #444;
+    white-space: nowrap;
+  }
+
+  .hist-report-facts td {
+    width: 35%;
+    padding: 2pt 12pt 2pt 0;
+  }
+
+  .hist-report-summary {
+    margin: 8pt 0 4pt;
+    font-size: 9pt;
+    color: #333;
+  }
+
+  .hist-report-empty {
+    margin: 12pt 0;
+    font-size: 9.5pt;
+    color: #333;
+  }
+
+  .hist-report-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8.5pt;
+  }
+
+  .hist-report-table thead th {
+    padding: 4pt 4pt;
+    text-align: left;
+    font-size: 8pt;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    border-bottom: 1pt solid #000;
+    border-bottom-color: #000;
+  }
+
+  .hist-report-table thead {
+    display: table-header-group;
+  }
+
+  .hist-report-table td {
+    padding: 3pt 4pt;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+  }
+
+  .hist-report-first td {
+    border-top: 0.5pt solid #bbb;
+  }
+
+  .hist-report-table tbody tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .hist-report-table .c-when { width: 15%; white-space: nowrap; }
+  .hist-report-table .c-what { width: 19%; font-weight: 600; }
+  .hist-report-table .c-field { width: 13%; color: #444; }
+  .hist-report-table .c-from { width: 21%; }
+  .hist-report-table .c-to { width: 21%; }
+  .hist-report-table .c-who { width: 11%; color: #444; }
+
+  .hist-report-foot {
+    margin-top: 10pt;
+    padding-top: 5pt;
+    border-top: 0.5pt solid #bbb;
+    font-size: 7.5pt;
+    color: #444;
+  }
+}

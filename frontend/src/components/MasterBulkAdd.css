@@ -1,0 +1,138 @@
+.bulk-mode-switch {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.bulk-mode-btn {
+  padding: 6px 12px;
+  margin-bottom: -1px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-main);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.bulk-mode-btn:hover {
+  color: var(--text-primary);
+  background: var(--surface-sunken);
+}
+
+.bulk-mode-btn.active {
+  background: var(--surface-1);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.bulk-file-config {
+  margin-top: 12px;
+}
+
+.bulk-file-name {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.bulk-file-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.bulk-file-selects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.bulk-file-selects .field {
+  flex: 1;
+  min-width: 190px;
+}
+
+.bulk-add-text {
+  font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  resize: vertical;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.bulk-add-preview {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-strong);
+}
+
+.bulk-add-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.bulk-count {
+  padding: 3px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.bulk-count-new {
+  border-color: var(--good);
+  color: var(--good);
+  font-weight: 600;
+}
+
+.bulk-count-bad {
+  border-color: var(--critical);
+  color: var(--critical);
+}
+
+.bulk-add-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.bulk-add-table th,
+.bulk-add-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.bulk-add-table thead th {
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+}
+
+.bulk-add-table tr.row-skipped td {
+  color: var(--text-muted);
+}
+
+.bulk-add-desc {
+  max-width: 220px;
+  word-break: break-word;
+}
+
+.bulk-add-more {
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}

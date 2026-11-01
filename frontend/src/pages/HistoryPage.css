@@ -1,0 +1,254 @@
+.history-page .page-header h1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hist-filter-row {
+  margin-bottom: 8px;
+}
+
+.hist-download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.hist-col-pick {
+  width: 34px;
+  cursor: default;
+}
+
+.hist-col-pick input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.hist-tr.row-selected {
+  background: var(--accent-soft);
+}
+
+.hist-clear-selection {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.hist-count-hint {
+  color: var(--text-muted);
+}
+
+.hist-changes-custom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px 4px;
+  border-top: 1px solid var(--border);
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+
+.hist-changes-custom input {
+  width: 72px;
+  padding: 4px 8px;
+}
+
+.hist-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.hist-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.hist-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 3px 4px 3px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  font-size: 11.5px;
+  color: var(--text-primary);
+}
+
+.hist-filter-chip-key {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.hist-filter-chip button {
+  display: flex;
+  padding: 2px;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.hist-filter-chip button:hover {
+  background: var(--surface-1);
+  color: var(--text-primary);
+}
+
+.hist-count {
+  margin-bottom: 8px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.hist-table-wrap {
+  position: relative;
+}
+
+.hist-table-wrap.is-loading {
+  opacity: 0.55;
+  transition: opacity var(--transition-fast);
+}
+
+.hist-tr {
+  cursor: pointer;
+}
+
+.hist-tr:hover {
+  background: var(--surface-sunken);
+}
+
+.hist-tr:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.hist-col-id {
+  white-space: nowrap;
+}
+
+.hist-asset-id {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--accent);
+}
+
+.hist-asset-was {
+  display: block;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.hist-muted {
+  color: var(--text-secondary);
+}
+
+.hist-nowrap {
+  white-space: nowrap;
+}
+
+.hist-gone {
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+.hist-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.hist-chip-deleted {
+  background: var(--critical-soft);
+  color: var(--critical);
+}
+
+.hist-chip-restored,
+.hist-chip-created {
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.hist-chip-imported {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.hist-open {
+  width: 24px;
+  text-align: right;
+  color: var(--text-muted);
+}
+
+.hist-tr:hover .hist-open {
+  color: var(--accent);
+}
+
+.hist-empty-state {
+  padding: 28px 16px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.hist-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.hist-pagination button {
+  padding: 5px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.hist-pagination button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+@media (max-width: 1000px) {
+  .hist-table th:nth-child(5),
+  .hist-table td:nth-child(5),
+  .hist-table th:nth-child(7),
+  .hist-table td:nth-child(7) {
+    display: none;
+  }
+}

@@ -1,0 +1,145 @@
+.hist-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+
+.hist-back:hover {
+  color: var(--accent);
+}
+
+.hist-detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+}
+
+.hist-detail-identity {
+  min-width: 0;
+}
+
+.hist-detail-id {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+
+.hist-detail-head h1 {
+  margin: 1px 0 0;
+  font-size: 20px;
+  overflow-wrap: anywhere;
+}
+
+.hist-detail-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  margin-top: 9px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.hist-detail-srl {
+  font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.hist-detail-head .btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.hist-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: none;
+}
+
+.hist-detail-count {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.hist-expand-all {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.hist-day {
+  margin-bottom: 14px;
+}
+
+.hist-day-label {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 5px 0 6px;
+  background: var(--surface-page);
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.hist-detail-list {
+  padding: 2px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+}
+
+.hist-detail-list .hist-row {
+  padding: 11px 0;
+}
+
+.hist-change {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.hist-detail-list .hist-what strong {
+  font-size: 12.5px;
+}
+
+.history-detail .hist-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 36px 16px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}

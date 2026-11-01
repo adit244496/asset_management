@@ -1,0 +1,402 @@
+.notify-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.notify-section {
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+}
+
+.notify-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 10px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.notify-muted {
+  margin: -4px 0 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.notify-muted code {
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--surface-sunken);
+  font-size: 11.5px;
+}
+
+.notify-modes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.notify-mode {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 8px;
+  row-gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.notify-mode input {
+  grid-row: span 2;
+  margin-top: 2px;
+  accent-color: var(--accent);
+}
+
+.notify-mode.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.notify-mode-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.notify-mode-hint {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+
+.notify-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 10px 14px;
+}
+
+.notify-wide {
+  grid-column: 1 / -1;
+}
+
+.notify-port {
+  max-width: 160px;
+}
+
+.notify-inline {
+  display: flex;
+  gap: 8px;
+}
+
+.notify-inline .field-input {
+  flex: 1;
+}
+
+/* Phones: a long suggestion button ("Use https://…") would crush the box beside it to a sliver,
+   so the box takes the full width and the button goes underneath it. */
+@media (max-width: 640px) {
+  .notify-inline {
+    flex-wrap: wrap;
+  }
+  .notify-inline .field-input {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .notify-inline .btn-secondary {
+    flex: 1 1 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: center;
+  }
+}
+
+.notify-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 22px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.notify-check input {
+  accent-color: var(--accent);
+}
+
+.notify-check-top {
+  margin: 0 0 6px;
+}
+
+.notify-explain {
+  margin: 0 0 10px;
+  max-width: 900px;
+}
+
+.notify-warn {
+  margin: 0 0 10px;
+  padding: 7px 10px;
+  max-width: 900px;
+  border-radius: var(--radius-sm);
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: 12px;
+  font-weight: 600;
+}
+.notify-renewals {
+  margin-top: 10px;
+  max-width: 900px;
+}
+.notify-renewals-head {
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.notify-renewals-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.notify-renewals-table td {
+  padding: 4px 8px;
+  border-top: 1px solid var(--border);
+}
+.notify-renewals-id {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  white-space: nowrap;
+}
+.notify-renewals-when {
+  white-space: nowrap;
+  font-weight: 600;
+}
+.notify-renewals-table tr.is-soon .notify-renewals-when { color: var(--warning); }
+.notify-renewals-table tr.is-overdue .notify-renewals-when { color: var(--critical); }
+
+/* Phones: each licence becomes a three-line card -- ID and how long to go, the name, then the date
+   and which reminder it is on -- instead of five squeezed columns. */
+@media (max-width: 640px) {
+  .notify-renewals-table,
+  .notify-renewals-table tbody {
+    display: block;
+  }
+  .notify-renewals-table tr {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+      "id . when"
+      "name name name"
+      "date stage stage";
+    gap: 3px 8px;
+    padding: 10px 2px;
+    border-top: 1px solid var(--border);
+  }
+  .notify-renewals-table td {
+    padding: 0;
+    border-top: none;
+    min-width: 0;
+  }
+  .notify-renewals-id { grid-area: id; font-size: 11px; color: var(--text-secondary); align-self: center; }
+  .notify-renewals-when { grid-area: when; text-align: right; }
+  .notify-renewals-name { grid-area: name; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+  .notify-renewals-date,
+  .notify-renewals-stage { font-size: 12px; line-height: 1.4; align-self: baseline; }
+  .notify-renewals-date { grid-area: date; white-space: nowrap; color: var(--text-secondary); }
+  .notify-renewals-stage { grid-area: stage; }
+  .notify-renewals-stage::before { content: '· '; }
+}
+
+.notify-span2 {
+  grid-column: span 2;
+}
+
+@media (max-width: 720px) {
+  .notify-span2 { grid-column: 1 / -1; }
+}
+
+.notify-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 4px 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-1);
+  cursor: text;
+}
+
+.notify-chips:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.notify-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  font-size: 12px;
+}
+
+.notify-chip.bad {
+  background: var(--critical-soft);
+  color: var(--critical);
+}
+
+.notify-chip-text,
+.notify-chip-x {
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.notify-chip-text {
+  padding: 2px 2px 2px 9px;
+}
+
+.notify-chip-x {
+  display: inline-flex;
+  padding: 3px 7px 3px 4px;
+  opacity: 0.7;
+}
+
+.notify-chip-x:hover {
+  opacity: 1;
+}
+
+.notify-chips-input {
+  flex: 1;
+  min-width: 180px;
+  padding: 3px 2px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+}
+
+.notify-event {
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+
+.notify-event:first-of-type {
+  padding-top: 0;
+  border-top: none;
+}
+
+.notify-event-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin-bottom: 8px;
+}
+
+.notify-event-head h4 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.notify-to {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+
+.notify-event .notify-modes {
+  margin-bottom: 0;
+}
+
+.notify-link {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--critical);
+  font: inherit;
+  font-size: 11.5px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.notify-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.notify-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.notify-requests-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.notify-requests-head h3 {
+  margin: 0 0 10px;
+}
+
+.notify-table td {
+  vertical-align: top;
+}
+
+.notify-nowrap {
+  white-space: nowrap;
+}
+
+.notify-ids {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.notify-reason {
+  max-width: 260px;
+  white-space: normal;
+  color: var(--text-secondary);
+}
+
+.notify-outcome {
+  margin-top: 3px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.notify-status {
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+}
+
+.notify-status.s-pending { background: var(--warning-soft); color: var(--warning); }
+.notify-status.s-approved { background: var(--good-soft); color: var(--good); }
+.notify-status.s-rejected,
+.notify-status.s-failed { background: var(--critical-soft); color: var(--critical); }
+
+.notify-export-status {
+  margin: 10px 0 12px;
+}

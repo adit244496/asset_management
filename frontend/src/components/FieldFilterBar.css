@@ -1,0 +1,51 @@
+.field-filter-row {
+  margin-bottom: 10px;
+}
+
+.field-filter-extra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.field-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: -2px 0 10px;
+}
+
+.field-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 3px 4px 3px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  font-size: 11.5px;
+  color: var(--text-primary);
+}
+
+.field-filter-chip-key {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.field-filter-chip button {
+  display: flex;
+  padding: 2px;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.field-filter-chip button:hover {
+  background: var(--surface-1);
+  color: var(--text-primary);
+}

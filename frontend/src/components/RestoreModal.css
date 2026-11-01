@@ -1,0 +1,31 @@
+.restore-modal {
+  width: min(480px, 100%);
+}
+
+.restore-lede {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.restore-lede strong {
+  color: var(--text-primary);
+}
+
+.restore-hint {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.restore-hint strong {
+  color: var(--text-secondary);
+}
+
+.restore-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

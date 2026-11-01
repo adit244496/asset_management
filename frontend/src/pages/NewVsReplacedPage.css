@@ -1,0 +1,101 @@
+.lifecycle-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 10px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.lifecycle-back:hover { color: var(--accent); }
+
+.lifecycle-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.lifecycle-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.lifecycle-toolbar .search-box {
+  flex: 1 1 240px;
+  max-width: 380px;
+}
+
+.lifecycle-meta {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.lifecycle-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+}
+
+.lifecycle-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.lifecycle-tab:hover { color: var(--text-primary); }
+
+.lifecycle-tab.active {
+  background: var(--surface-1);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.lifecycle-tab::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.lifecycle-tab.is-new::before { background: #2a78d6; }
+.lifecycle-tab.is-replaced::before { background: #eb6834; }
+
+:root[data-theme='dark'] .lifecycle-tab.is-new::before { background: #3987e5; }
+:root[data-theme='dark'] .lifecycle-tab.is-replaced::before { background: #d95926; }
+
+.lifecycle-tab-count {
+  min-width: 22px;
+  padding: 0 7px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft-strong);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.lifecycle-table-wrap {
+  max-height: calc(100vh - 290px);
+  min-height: 240px;
+}
+
+.lifecycle-row { cursor: pointer; }

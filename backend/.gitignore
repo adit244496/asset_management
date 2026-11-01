@@ -1,0 +1,18 @@
+# Local environment / secrets -- never commit a real .env
+.env
+
+# Virtualenv
+.venv/
+venv/
+
+# Python bytecode / test caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local SQLite databases (the dev fallback; real deployments use PostgreSQL)
+*.db
+
+# Local run artifacts (server logs / pid files from local dev)
+*.log
+*_pid.txt

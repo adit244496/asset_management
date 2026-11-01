@@ -1,0 +1,191 @@
+.link-per-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.link-per-field {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  border-radius: var(--radius-sm, 8px);
+}
+
+.link-per-input {
+  display: block;
+  width: 100%;
+  min-height: 38px;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.link-per-field.is-glaring {
+  overflow: hidden;
+  animation: link-per-glow 1.3s ease-in-out 3;
+}
+
+.link-per-field.is-glaring .link-per-input {
+  border-color: var(--accent);
+}
+
+.link-per-field.is-glaring::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.55) 50%, transparent 65%);
+  background-size: 250% 100%;
+  background-repeat: no-repeat;
+  animation: link-per-sweep 1.3s ease-in-out 3;
+}
+
+.link-per-field.is-glaring::before {
+  content: '✦';
+  position: absolute;
+  top: 3px;
+  right: 8px;
+  z-index: 2;
+  pointer-events: none;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--accent);
+  text-shadow: 0 0 6px var(--accent);
+  animation: link-per-twinkle 0.65s ease-in-out 6;
+}
+
+@keyframes link-per-glow {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50% { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 14px 1px var(--accent); }
+}
+
+@keyframes link-per-sweep {
+  from { background-position: 130% 0; }
+  to { background-position: -30% 0; }
+}
+
+@keyframes link-per-twinkle {
+  0%, 100% { opacity: 0; transform: scale(0.4) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1.15) rotate(45deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .link-per-field.is-glaring,
+  .link-per-field.is-glaring::after,
+  .link-per-field.is-glaring::before {
+    animation: none;
+  }
+
+  .link-per-field.is-glaring::after,
+  .link-per-field.is-glaring::before {
+    display: none;
+  }
+
+  .link-per-field.is-glaring {
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+}
+
+.link-per.armed .link-per-input {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.link-per-scan,
+.link-per-add {
+  flex: none;
+  margin-right: 0;
+  padding: 9px 12px;
+}
+
+.link-per-scan.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.link-per-hint {
+  margin-top: 6px;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.link-per-hint-armed {
+  color: var(--accent);
+}
+
+.link-per-hint-ok {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--good);
+}
+
+.link-per-hint-error {
+  color: var(--critical);
+}
+
+.link-per-hint-warning {
+  color: var(--warning);
+}
+
+.link-per-hint-info {
+  color: var(--text-secondary);
+}
+
+.link-per-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.link-per-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 6px 5px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface-1);
+  font-size: 12px;
+}
+
+.link-per-chip-icon {
+  flex: none;
+  color: var(--accent);
+}
+
+.link-per-chip-id {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.link-per-chip-meta {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.link-per-chip-x {
+  display: flex;
+  padding: 3px;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.link-per-chip-x:hover:not(:disabled) {
+  background: var(--critical-soft);
+  color: var(--critical);
+}
+
+.link-per-empty {
+  margin-top: 9px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}

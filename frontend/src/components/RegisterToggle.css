@@ -1,0 +1,70 @@
+.reg-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+}
+
+.reg-toggle:disabled {
+  opacity: 0.6;
+}
+
+.reg-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.reg-option:hover:not(.active) {
+  color: var(--text-primary);
+}
+
+.reg-option.active {
+  background: var(--surface-1);
+  box-shadow: var(--shadow-sm);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.reg-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.reg-option:has(input:focus-visible) {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+.reg-toggle:disabled .reg-option {
+  cursor: default;
+}
+
+.reg-toggle-sm .reg-option {
+  padding: 5px 11px;
+  font-size: 12px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
