@@ -1,0 +1,2 @@
+# These files run on Linux: a Windows checkout must not turn them into CRLF.
+* text eol=lf

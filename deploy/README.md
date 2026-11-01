@@ -1,63 +1,78 @@
 # Deploying the IT Asset Engine
 
-For a Windows Server. Users reach the app at `https://<server>:8018`.
+For Ubuntu 24.04. Users reach the app at `https://<server>:8018`.
 
 ```
-Browser --HTTPS :8018--> nginx --> frontend/dist (static files)
+Browser --HTTPS :8018--> nginx --> /var/www/asset-management (static files)
                            |
                            +-- /api --> waitress 127.0.0.1:8019 --> PostgreSQL
 ```
 
-Port 8019 is internal and never opened in the firewall. If it is taken, pass
-`-ApiPort` to both `install.ps1` and `update.ps1`.
+The app is added to the server's existing nginx as one extra site. Other sites stay
+as they are: the installer tests the config before reloading, removes its site if the
+test fails, and never restarts nginx.
+
+Port 8019 is internal and is never opened in the firewall. To use a different port,
+pass `--api-port` to `install.sh` (`update.sh` remembers it).
 
 ## What the server needs
 
-- Python 3.10 or newer, and Node.js 22, both on `PATH`
-- Git
-- PostgreSQL, including `pg_dump` (used for backups)
-- [nginx for Windows](https://nginx.org/en/download.html) 1.25.1 or newer, unzipped to `C:\nginx` (no need to configure it)
-- [NSSM](https://nssm.cc/), with `nssm.exe` on `PATH`
-- A TLS certificate and key for the server's name
-- Port 8018 open on any network firewall between users and the server (the script handles Windows Firewall)
+- Python 3.10+, Node.js 20.19+, Git, nginx and PostgreSQL with `pg_dump`
+- `sudo` access
+- A TLS certificate and key
+- Port 8018 open on any network firewall between users and the server (the script handles `ufw`)
 
-Use a certificate from your company's CA if you can. The QR camera scanner only works
-over HTTPS, and with a self-signed certificate every user gets a browser warning.
+The QR camera scanner only works over HTTPS. With a self-signed certificate, every user
+gets a browser warning, so use your company's CA or an existing certificate if you can.
+This lists the certificates nginx already uses:
 
-Do not install under a path containing spaces. The script stops if you do.
+```bash
+sudo nginx -T 2>/dev/null | grep ssl_certificate
+```
+
+If you have none, create a self-signed one for testing (replace `SERVER_NAME`):
+
+```bash
+sudo openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
+    -keyout /etc/ssl/private/asset-management.key \
+    -out /etc/ssl/certs/asset-management.crt \
+    -subj "/CN=SERVER_NAME" -addext "subjectAltName=DNS:SERVER_NAME"
+```
+
+For an IP address, use `subjectAltName=IP:<address>` instead.
 
 ## First install
 
-Run everything in an **Administrator** PowerShell.
-
 **1. Get the code**
 
-```powershell
-git clone <your-private-repo-url> E:\asset-management-it
-cd E:\asset-management-it
+```bash
+cd ~
+git clone https://github.com/adit244496/asset_management.git asset_management
+cd asset_management
 ```
 
-**2. Create the database and its user.** Choose a strong password first.
+**2. Create the database and its user.** This prompts for a new password. Choose a
+strong one and keep it for step 4.
 
-```powershell
-psql -U postgres -c "CREATE ROLE asset_app LOGIN PASSWORD 'your-db-password';"
-psql -U postgres -c "CREATE DATABASE asset_management OWNER asset_app;"
+```bash
+sudo -u postgres createuser --pwprompt asset_app
+sudo -u postgres createdb --owner=asset_app asset_management
 ```
 
-**3. Run the installer.** The first run creates `backend\.env` and stops.
+**3. Run the installer.** The first run creates `backend/.env` and stops.
 
-```powershell
-.\deploy\install.ps1 -ServerName itassets.company.local `
-    -CertFile C:\certs\itassets.crt -KeyFile C:\certs\itassets.key `
-    -BackupDir D:\backups\asset-management
+```bash
+sudo env "PATH=$PATH" bash deploy/install.sh \
+    --server-name YOUR_SERVER_NAME_OR_IP \
+    --cert /etc/ssl/certs/asset-management.crt \
+    --key /etc/ssl/private/asset-management.key
 ```
 
-If scripts are blocked, first run `Set-ExecutionPolicy -Scope Process Bypass`.
-Put `-BackupDir` on a different disk from the database.
+`env "PATH=$PATH"` is needed so `sudo` can find Node.js if it was installed with `nvm`.
 
-**4. Edit `backend\.env`**, replacing both `CHANGE_ME` values:
+**4. Edit `backend/.env`** (`nano backend/.env`), replacing both `CHANGE_ME` values:
 
-- `DATABASE_URL`: the database password from step 2. Percent-encode `@ : / ? # %` (for example `@` becomes `%40`).
+- `DATABASE_URL`: the password from step 2. Percent-encode `@ : / ? # %` (for example `@` becomes `%40`).
 - `ADMIN_PASSWORD`: the starting password for the seeded accounts.
 
 Add `GEMINI_API_KEY` if you want the AI assistant. Do not copy the `.env` from a
@@ -73,43 +88,56 @@ development machine.
 
 ## Releasing an update
 
-```powershell
-cd E:\asset-management-it
-.\deploy\update.ps1 -BackupDir D:\backups\asset-management
+```bash
+cd ~/asset_management
+sudo env "PATH=$PATH" bash deploy/update.sh
 ```
 
-If you changed `nginx.conf.template` or moved a certificate, run `install.ps1` again.
+If you changed `nginx.conf.template` or the certificate path, run `install.sh` again.
 It keeps the existing `.env` and data.
 
 ## What gets installed
 
 | Item | Name | Purpose |
 |---|---|---|
-| Service | `AssetManagementAPI` | The backend, including scheduled emails |
-| Service | `AssetManagementWeb` | nginx, separate from any other nginx on the server |
-| Scheduled task | `AssetManagementBackup` | Database backup at 02:00, kept for 30 days |
-| Firewall rule | `IT Asset Engine HTTPS 8018` | Inbound access to the app |
+| Service | `asset-management-api` | The backend, including scheduled emails |
+| Timer | `asset-management-backup.timer` | Database backup at 02:00, kept for 30 days |
+| nginx site | `/etc/nginx/sites-available/asset-management` | HTTPS on 8018 and the `/api` proxy |
+| Web files | `/var/www/asset-management` | The built frontend |
+| Backups | `/var/backups/asset-management` | Copy these off the server as well |
+| Settings | `/etc/default/asset-management` | The ports, read by `update.sh` |
 
-Logs are in `deploy\runtime\logs\`. `api.log` is the first place to look.
+## Everyday commands
+
+```bash
+systemctl status asset-management-api
+journalctl -u asset-management-api -f       # backend log
+sudo systemctl restart asset-management-api
+systemctl list-timers asset-management-backup.timer
+sudo systemctl start asset-management-backup.service   # back up now
+```
 
 ## Restoring a backup
 
 Restore into an empty database and check it before switching over:
 
-```powershell
-createdb -U postgres asset_management_restore
-pg_restore -U postgres -d asset_management_restore --no-owner <file>.dump
+```bash
+sudo -u postgres createdb asset_management_restore
+sudo -u postgres pg_restore -d asset_management_restore --no-owner <file>.dump
 ```
 
-Keep `backend\.env` backed up securely as well. Without its `SECRET_KEY`, the saved
+The `postgres` user must be able to read the file, so copy it to `/tmp` first.
+
+Keep `backend/.env` backed up securely as well. Without its `SECRET_KEY`, the saved
 mail password cannot be read and must be entered again.
 
 ## Troubleshooting
 
 | Symptom | Check |
 |---|---|
-| `Not healthy after 120 seconds` | `deploy\runtime\logs\api.log`: usually a wrong `DATABASE_URL` or an unencoded password |
-| Service will not start, nothing in `api.log` | Run `backend\.venv\Scripts\python.exe deploy\serve.py` directly to see the error |
-| Site unreachable from other PCs | The network firewall allows 8018, and `AssetManagementWeb` is running |
-| 502 from `/api` | `AssetManagementAPI` is stopped: see `api.log` |
-| Port already in use | `netstat -ano | findstr "8018 8019"` |
+| `The API did not become healthy` | `journalctl -u asset-management-api`: usually a wrong `DATABASE_URL` or an unencoded password |
+| `npm not found` | Include `env "PATH=$PATH"` in the `sudo` command |
+| `nginx rejected the new site` | The error above it, usually a certificate path or a key that does not match |
+| Site unreachable from other PCs | Network firewall allows 8018; `sudo ufw status` |
+| 502 from `/api` | `systemctl status asset-management-api` |
+| Port already in use | `sudo ss -tlnp | grep -E ':(8018|8019)\b'` |

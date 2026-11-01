@@ -1,10 +1,8 @@
 """Production entry point: runs the API under waitress, on loopback only.
 
-    backend\\.venv\\Scripts\\python.exe deploy\\serve.py --port 8019
+    backend/.venv/bin/python deploy/serve.py --port 8019
 
-Started by the AssetManagementAPI service (see install.ps1). Options live here
-rather than on the service's command line because the quoted, space-separated
-proxy-header list does not survive Windows PowerShell -> NSSM quoting.
+Started by the asset-management-api systemd service (see install.sh).
 """
 import argparse
 import sys
