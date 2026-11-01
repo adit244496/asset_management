@@ -1,6 +1,6 @@
 """Production entry point: runs the API under waitress, on loopback only.
 
-    backend/.venv/bin/python deploy/serve.py --port 8019
+    backend/.venv/bin/python deploy/serve.py --port 8018
 
 Started by the asset-management-api systemd service (see install.sh).
 """
@@ -14,7 +14,7 @@ sys.path.insert(0, str(BACKEND))
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--port", type=int, default=8019)
+    ap.add_argument("--port", type=int, default=8018)
     ap.add_argument("--threads", type=int, default=8)
     args = ap.parse_args()
 

@@ -29,6 +29,6 @@ install_backend
 systemctl restart "$API_SERVICE"
 wait_healthy "$API_PORT"
 publish_frontend
-check_public "$PUBLIC_PORT"
+check_public "$SERVER_NAME"
 
 printf '\nUpdate complete.\n'

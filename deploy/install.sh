@@ -9,7 +9,7 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 SERVER_NAME='' CERT_FILE='' KEY_FILE=''
-PUBLIC_PORT=8018 API_PORT=8019
+API_PORT=8018
 BACKUP_DIR=/var/backups/asset-management
 
 while [ $# -gt 0 ]; do
@@ -17,7 +17,6 @@ while [ $# -gt 0 ]; do
         --server-name) SERVER_NAME="$2"; shift 2 ;;
         --cert) CERT_FILE="$2"; shift 2 ;;
         --key) KEY_FILE="$2"; shift 2 ;;
-        --public-port) PUBLIC_PORT="$2"; shift 2 ;;
         --api-port) API_PORT="$2"; shift 2 ;;
         --backup-dir) BACKUP_DIR="$2"; shift 2 ;;
         *) die "Unknown option: $1" ;;
@@ -42,10 +41,7 @@ done
 # Not grep -q: it exits early, and pipefail then reports nginx's broken pipe as failure.
 nginx -T 2>/dev/null | grep 'include /etc/nginx/sites-enabled/\*' >/dev/null \
     || die "This nginx does not load /etc/nginx/sites-enabled/."
-# On a re-run these ports are ours; on a first run anything there is someone else's.
-if [ ! -e "$NGINX_ENABLED" ] && [ -n "$(port_owner "$PUBLIC_PORT")" ]; then
-    die "Port $PUBLIC_PORT is already in use: $(port_owner "$PUBLIC_PORT")"
-fi
+# On a re-run this port is ours; on a first run anything there is someone else's.
 if ! systemctl is-active --quiet "$API_SERVICE" && [ -n "$(port_owner "$API_PORT")" ]; then
     die "Port $API_PORT is already in use: $(port_owner "$API_PORT")"
 fi
@@ -58,7 +54,8 @@ if [ ! -f "$ENV_FILE" ]; then
 fi
 chown "$APP_USER": "$ENV_FILE"
 chmod 600 "$ENV_FILE"
-if grep -q CHANGE_ME "$ENV_FILE"; then
+# Settings only: the template's header comment mentions CHANGE_ME too.
+if grep -q '^[^#]*CHANGE_ME' "$ENV_FILE"; then
     printf '\nReplace every CHANGE_ME in %s, then run this script again.\n' "$ENV_FILE"
     exit 1
 fi
@@ -78,7 +75,7 @@ step "Installing the services"
 install -d -o "$APP_USER" -g "$(id -gn "$APP_USER")" -m 750 "$BACKUP_DIR"
 
 cat > "$SETTINGS_FILE" <<EOF
-PUBLIC_PORT=$PUBLIC_PORT
+SERVER_NAME=$SERVER_NAME
 API_PORT=$API_PORT
 EOF
 
@@ -144,7 +141,6 @@ was_enabled=''
 [ -e "$NGINX_ENABLED" ] && was_enabled=yes
 
 sed -e "s|@@SERVER_NAME@@|$SERVER_NAME|g" \
-    -e "s|@@PUBLIC_PORT@@|$PUBLIC_PORT|g" \
     -e "s|@@API_PORT@@|$API_PORT|g" \
     -e "s|@@CERT_FILE@@|$CERT_FILE|g" \
     -e "s|@@KEY_FILE@@|$KEY_FILE|g" \
@@ -161,13 +157,6 @@ fi
 # reload, never restart: the other sites keep serving throughout.
 systemctl reload nginx
 sleep 2
-check_public "$PUBLIC_PORT"
+check_public "$SERVER_NAME"
 
-step "Opening the firewall"
-if command -v ufw >/dev/null && ufw status | grep '^Status: active' >/dev/null; then
-    ufw allow "$PUBLIC_PORT/tcp" comment 'IT Asset Engine'
-else
-    echo "ufw is not active: nothing to change."
-fi
-
-printf '\nInstalled: https://%s:%s\n' "$SERVER_NAME" "$PUBLIC_PORT"
+printf '\nInstalled: https://%s\n' "$SERVER_NAME"

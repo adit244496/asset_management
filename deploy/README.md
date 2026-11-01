@@ -1,45 +1,30 @@
 # Deploying the IT Asset Engine
 
-For Ubuntu 24.04. Users reach the app at `https://<server>:8018`.
+For Ubuntu 24.04. Users reach the app at `https://itasset.ambujaneotia.com`.
 
 ```
-Browser --HTTPS :8018--> nginx --> /var/www/asset-management (static files)
-                           |
-                           +-- /api --> waitress 127.0.0.1:8019 --> PostgreSQL
+Browser --HTTPS :443--> nginx --> /var/www/asset-management (static files)
+                          |
+                          +-- /api --> waitress 127.0.0.1:8018 --> PostgreSQL
 ```
 
-The app is added to the server's existing nginx as one extra site. Other sites stay
-as they are: the installer tests the config before reloading, removes its site if the
-test fails, and never restarts nginx.
+The app is added to the server's existing nginx as one extra site, chosen by its name.
+Other sites stay as they are: the installer tests the config before reloading, removes
+its site if the test fails, and never restarts nginx.
 
-Port 8019 is internal and is never opened in the firewall. To use a different port,
+Port 8018 is internal and is never opened in any firewall. To use a different port,
 pass `--api-port` to `install.sh` (`update.sh` remembers it).
 
 ## What the server needs
 
 - Python 3.10+, Node.js 20.19+, Git, nginx and PostgreSQL with `pg_dump`
 - `sudo` access
-- A TLS certificate and key
-- Port 8018 open on any network firewall between users and the server (the script handles `ufw`)
-
-The QR camera scanner only works over HTTPS. With a self-signed certificate, every user
-gets a browser warning, so use your company's CA or an existing certificate if you can.
-This lists the certificates nginx already uses:
+- A DNS record for the app's name pointing at this server
+- A TLS certificate for that name. The QR camera scanner only works over HTTPS.
 
 ```bash
-sudo nginx -T 2>/dev/null | grep ssl_certificate
+sudo certbot certonly --nginx -d itasset.ambujaneotia.com
 ```
-
-If you have none, create a self-signed one for testing (replace `SERVER_NAME`):
-
-```bash
-sudo openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
-    -keyout /etc/ssl/private/asset-management.key \
-    -out /etc/ssl/certs/asset-management.crt \
-    -subj "/CN=SERVER_NAME" -addext "subjectAltName=DNS:SERVER_NAME"
-```
-
-For an IP address, use `subjectAltName=IP:<address>` instead.
 
 ## First install
 
@@ -63,9 +48,9 @@ sudo -u postgres createdb --owner=asset_app asset_management
 
 ```bash
 sudo env "PATH=$PATH" bash deploy/install.sh \
-    --server-name YOUR_SERVER_NAME_OR_IP \
-    --cert /etc/ssl/certs/asset-management.crt \
-    --key /etc/ssl/private/asset-management.key
+    --server-name itasset.ambujaneotia.com \
+    --cert /etc/letsencrypt/live/itasset.ambujaneotia.com/fullchain.pem \
+    --key /etc/letsencrypt/live/itasset.ambujaneotia.com/privkey.pem
 ```
 
 `env "PATH=$PATH"` is needed so `sudo` can find Node.js if it was installed with `nvm`.
@@ -84,7 +69,7 @@ development machine.
 
 - Sign in as `superadmin` and set a new password.
 - Sign in as `admin`, `verifier` and `viewer` and set theirs, because they share the starting password.
-- Under **Master Data > Notifications**, set the app address to `https://<server>:8018`, or links in approval emails will not work, and enter the mail server details.
+- Under **Master Data > Notifications**, set the app address to `https://itasset.ambujaneotia.com`, or links in approval emails will not work, and enter the mail server details.
 
 ## Releasing an update
 
@@ -102,10 +87,10 @@ It keeps the existing `.env` and data.
 |---|---|---|
 | Service | `asset-management-api` | The backend, including scheduled emails |
 | Timer | `asset-management-backup.timer` | Database backup at 02:00, kept for 30 days |
-| nginx site | `/etc/nginx/sites-available/asset-management` | HTTPS on 8018 and the `/api` proxy |
+| nginx site | `/etc/nginx/sites-available/asset-management` | HTTPS on 443 and the `/api` proxy |
 | Web files | `/var/www/asset-management` | The built frontend |
 | Backups | `/var/backups/asset-management` | Copy these off the server as well |
-| Settings | `/etc/default/asset-management` | The ports, read by `update.sh` |
+| Settings | `/etc/default/asset-management` | Server name and API port, read by `update.sh` |
 
 ## Everyday commands
 
@@ -138,6 +123,6 @@ mail password cannot be read and must be entered again.
 | `The API did not become healthy` | `journalctl -u asset-management-api`: usually a wrong `DATABASE_URL` or an unencoded password |
 | `npm not found` | Include `env "PATH=$PATH"` in the `sudo` command |
 | `nginx rejected the new site` | The error above it, usually a certificate path or a key that does not match |
-| Site unreachable from other PCs | Network firewall allows 8018; `sudo ufw status` |
+| Another app or a certificate warning | The nginx site is missing: `ls /etc/nginx/sites-enabled/` |
 | 502 from `/api` | `systemctl status asset-management-api` |
-| Port already in use | `sudo ss -tlnp | grep -E ':(8018|8019)\b'` |
+| Port already in use | `sudo ss -tlnp | grep ':8018\b'` |

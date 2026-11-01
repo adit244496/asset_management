@@ -65,11 +65,13 @@ wait_healthy() {
 }
 
 check_public() {
-    local port="$1"
-    # -k: this checks that nginx answers, not whose certificate it presents.
-    curl -kfsS -o /dev/null --max-time 10 "https://127.0.0.1:$port/" \
-        || die "The site did not answer on port $port. See /var/log/nginx/asset-management-error.log"
-    curl -kfsS -o /dev/null --max-time 10 "https://127.0.0.1:$port/api/health" \
-        || die "nginx did not reach the API on port $port."
-    echo "Site is answering on port $port."
+    local name="$1"
+    # --resolve sends the real name, so nginx picks this site rather than its
+    # default one. -k: this checks that it answers, not the certificate.
+    local curl_site=(curl -kfsS -o /dev/null --max-time 10 --resolve "$name:443:127.0.0.1")
+    "${curl_site[@]}" "https://$name/" \
+        || die "The site did not answer. See /var/log/nginx/asset-management-error.log"
+    "${curl_site[@]}" "https://$name/api/health" \
+        || die "nginx did not reach the API."
+    echo "Site is answering at https://$name"
 }
