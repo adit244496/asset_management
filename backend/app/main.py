@@ -370,6 +370,29 @@ def _refuse_unsafe_secret_key() -> None:
             'for example the output of: python -c "import secrets; print(secrets.token_hex(32))"')
 
 
+def _ensure_assistant_settings(db) -> None:
+    """First start only: copy the AI set-up from .env into Admin controls.
+    Once the row exists, .env keys are never read again (see
+    app/assistant/control.py)."""
+    from app.assistant import control
+
+    copied = control.ensure_settings(db)
+    if copied is None:
+        if settings.GEMINI_API_KEY or settings.ANTHROPIC_API_KEY:
+            logger.warning(
+                "backend/.env still holds an AI API key. It is ignored: the assistant's keys are "
+                "managed under Admin controls (profile menu, superadmin). Remove it from .env.")
+        return
+    if copied:
+        logger.warning(
+            "Copied the %s API key(s) from backend/.env into Admin controls (stored encrypted). "
+            "From now on keys are managed there and .env keys are ignored -- remove them from .env.",
+            " and ".join(control.PROVIDER_LABELS[p] for p in copied))
+    else:
+        logger.warning("Created the AI assistant settings. No API key was found in backend/.env; "
+                       "a superadmin can add one under Admin controls.")
+
+
 def create_app() -> Flask:
     import app.models  # noqa: F401  (registers User/Asset/master tables on Base.metadata)
     from app import crud, roles
@@ -459,6 +482,11 @@ def create_app() -> Flask:
             logger.warning("Filled in %s for %d account(s) from the register.",
                            field, count)
 
+        _ensure_assistant_settings(db)
+
+    from app import live
+    live.ensure_counters()
+
     app = Flask(__name__)
     app.config["SECRET_KEY"] = settings.SECRET_KEY
 
@@ -467,8 +495,10 @@ def create_app() -> Flask:
         origins = "*" if cors_origins == "*" else [o.strip() for o in cors_origins.split(",") if o.strip()]
         CORS(app, resources={r"/api/*": {"origins": origins}}, supports_credentials=False)
 
-    from app import activity
+    from app import activity, live
     from app.api.activity import bp as activity_bp
+    from app.api.admin import bp as admin_bp
+    from app.api.live import bp as live_bp
     from app.api.assets import BLUEPRINTS as register_bps
     from app.api.assistant import bp as assistant_bp
     from app.api.auth import bp as auth_bp
@@ -488,12 +518,15 @@ def create_app() -> Flask:
     app.register_blueprint(verification_bp)
     app.register_blueprint(notifications_bp)
     app.register_blueprint(data_bp)
+    app.register_blueprint(admin_bp)
+    app.register_blueprint(live_bp)
 
     if "pytest" not in sys.modules and os.getenv("DISABLE_SCHEDULER", "").lower() not in ("1", "true", "yes"):
         from app import approvals
         approvals.start_scheduler()
 
     activity.install(app)
+    live.install(app)
 
     @app.route("/api/health")
     def health():

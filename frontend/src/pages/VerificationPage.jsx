@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
-  Check, CheckCheck, ClipboardCheck, Pencil, Trash2, X,
+  Check, CheckCheck, ClipboardCheck, Copy, Pencil, Trash2, X,
 } from 'lucide-react';
 import api, { errorMessage } from '../api';
 import AssetModal from '../components/AssetModal';
@@ -9,7 +10,9 @@ import SearchBox from '../components/SearchBox';
 import { useAssets } from '../context/AssetsContext';
 import { useAuth } from '../context/AuthContext';
 import { formatDate } from '../lib/dates';
+import { TOPIC, useLiveTick } from '../lib/live';
 import { useLongPress } from '../lib/longPress';
+import { cloneAsset } from '../lib/schema';
 import { joinRecorded } from '../lib/notRecorded';
 import { REGISTER_LIST, SOFTWARE } from '../lib/registers';
 import {
@@ -59,9 +62,9 @@ const DecisionModal = ({ kind, row, onClose, onDone }) => {
             <strong>{label}</strong> ({row.assetId}){' '}
             {reject
               ? 'stays in Verification, marked as sent back, with your reason beside it. '
-                + 'Correcting it puts it back in the queue.'
+              + 'Correcting it puts it back in the queue.'
               : 'is removed without ever entering the register. Its history and your reason are '
-                + 'kept in the Activity Log. This cannot be undone.'}
+              + 'kept in the Activity Log. This cannot be undone.'}
           </p>
           <div className="field">
             <label htmlFor="verifyReason">{reject ? 'What needs correcting? *' : 'Reason (optional)'}</label>
@@ -101,7 +104,8 @@ const EDIT_LABELS = { location: 'Site' };
 
 const VerificationPage = () => {
   const { setRegister, invalidateAll, fetchRecord } = useAssets();
-  const { canDiscard } = useAuth();
+  const { canDiscard, canWrite } = useAuth();
+  const navigate = useNavigate();
   const [rows, setRows] = useState(null);
   const [banner, setBanner] = useState(null);
   const [state, setState] = useState('all');
@@ -116,28 +120,59 @@ const VerificationPage = () => {
 
   const [reloadKey, setReloadKey] = useState(0);
   const load = useCallback(() => setReloadKey((k) => k + 1), []);
+  // Others' entries and decisions appear as they happen; held while a
+  // decision or edit dialog is open.
+  const liveTick = useLiveTick(TOPIC.verification, { paused: Boolean(decision || editing) });
 
   useEffect(() => {
     let live = true;
     api.get('/verification')
-      .then((res) => { if (live) setRows(res.data?.items || []); })
+      .then((res) => {
+        if (!live) return;
+        const items = res.data?.items || [];
+        setRows(items);
+        // Forget ticks on entries that have left the queue.
+        setSelected((prev) => {
+          const here = new Set(items.map((r) => r.id));
+          const kept = [...prev].filter((id) => here.has(id));
+          return kept.length === prev.size ? prev : new Set(kept);
+        });
+      })
       .catch((err) => {
         if (!live) return;
         setRows((prev) => prev || []);
         setBanner({ text: errorMessage(err, 'Could not load the entries waiting for verification.'), kind: 'error' });
       });
     return () => { live = false; };
-  }, [reloadKey]);
+  }, [reloadKey, liveTick]);
 
   const counts = useMemo(() => countByState(rows), [rows]);
   const shown = useMemo(
     () => filterWaiting(rows, { state, query, register, who }),
     [rows, state, query, register, who],
   );
-  const canPick = (r) => !r.enteredByYou && r.verification !== REJECTED;
-  const shownIds = shown.filter(canPick).map((r) => r.id);
-  const selectedShown = shown.filter((r) => selected.has(r.id));
-  const allShownSelected = shownIds.length > 0 && selectedShown.length === shownIds.length;
+  // Verify only takes entries someone else entered that are not on hold.
+  const canVerifyRow = (r) => !r.enteredByYou && r.verification !== REJECTED;
+  // Admins and superadmins may also tick their own and sent-back entries --
+  // to clone them. Verify still skips those.
+  const canPick = (r) => canWrite || canVerifyRow(r);
+  const shownIds = shown.filter(canVerifyRow).map((r) => r.id);
+  const selectedShown = shown.filter((r) => canPick(r) && selected.has(r.id));
+  const toVerify = selectedShown.filter(canVerifyRow);
+  const allShownSelected = shownIds.length > 0 && shownIds.every((id) => selected.has(id));
+  const cloneSource = selectedShown.length === 1 ? selectedShown[0] : null;
+
+  const cloneSelected = () => {
+    if (!cloneSource) return;
+    setRegister(cloneSource.register);
+    navigate('/data-entry', {
+      state: {
+        cloneValues: cloneAsset(cloneSource, cloneSource.register),
+        cloneRegister: cloneSource.register,
+        cloneFrom: cloneSource.assetId,
+      },
+    });
+  };
 
   const afterChange = async (message, kind = 'success') => {
     setBanner({ text: message, kind });
@@ -241,15 +276,31 @@ const VerificationPage = () => {
         <div className="verify-bar">
           <span className="verify-count">{countLine}</span>
           <div className="verify-actions">
+            {canWrite && (
+              <button
+                type="button"
+                className="btn-secondary verify-btn"
+                onClick={cloneSelected}
+                disabled={busy || !cloneSource}
+                title={cloneSource
+                  ? `Open Data Entry pre-filled from ${cloneSource.assetId}`
+                  : 'Tick exactly one entry to clone it'}
+              >
+                <Copy size={14} /> Clone
+              </button>
+            )}
             <button
               type="button"
               className="btn-primary verify-btn"
-              onClick={() => verify(selectedShown)}
-              disabled={busy || !selectedShown.length}
-              title="Accept the selected entries into the register"
+              onClick={() => verify(toVerify)}
+              disabled={busy || !toVerify.length}
+              title={toVerify.length < selectedShown.length
+                ? 'Accept the selected entries you may verify into the register. Your own and '
+                + 'sent-back entries are left as they are.'
+                : 'Accept the selected entries into the register'}
             >
               <CheckCheck size={14} />
-              {selectedShown.length ? `Verify ${entries(selectedShown.length)}` : 'Verify selected'}
+              {toVerify.length ? `Verify ${entries(toVerify.length)}` : 'Verify selected'}
             </button>
           </div>
         </div>
@@ -299,8 +350,11 @@ const VerificationPage = () => {
                         checked={canPick(row) && selected.has(row.id)}
                         onChange={() => toggle(row.id)}
                         disabled={!canPick(row)}
-                        title={mine ? 'You entered this — another verifier has to verify it'
-                          : onHold ? 'Sent back — on hold until it is corrected' : undefined}
+                        title={canWrite && !canVerifyRow(row)
+                          ? `Tick to clone it. ${mine ? 'You entered this, so another verifier has to verify it'
+                            : 'Sent back, so it is on hold until it is corrected'}.`
+                          : mine ? 'You entered this — another verifier has to verify it'
+                            : onHold ? 'Sent back — on hold until it is corrected' : undefined}
                         aria-label={`Select ${row.assetTag || row.model || row.assetId}`}
                       />
                     </td>

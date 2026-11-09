@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import api from '../api';
+import { TOPIC, useLiveEvent } from '../lib/live';
 import { useAuth } from './AuthContext';
 
 const MastersContext = createContext(null);
@@ -31,8 +32,12 @@ export function MastersProvider({ children }) {
       setError((prev) => (prev ? null : prev));
       return;
     }
-    reload().catch(() => {  });
+    reload().catch(() => { });
   }, [isAuthenticated, reload]);
+
+  useLiveEvent(TOPIC.masters, () => {
+    if (isAuthenticated) reload().catch(() => { });
+  });
 
   const listKey = useCallback((key, registerKey) => {
     const own = categories.filter((c) => (c.field || c.key) === key);

@@ -196,6 +196,7 @@ table.activity-table td.activity-what {
 }
 
 @media (max-width: 1279px) {
+
   .activity-table th:nth-child(4),
   .activity-table td:nth-child(4) {
     display: none;

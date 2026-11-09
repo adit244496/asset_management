@@ -23,7 +23,7 @@ export const COLUMNS = [
 
   { key: 'assetId', label: 'Asset ID', type: 'text', group: 'identification', required: false, filterType: 'text', width: 110, generated: true, headerAliases: ['asset id', 'assetid', 'amb id', 'peripheral id', 'peripheralid'] },
 
-  { key: 'sapId', label: 'SAP ID', type: 'text', group: 'identification', required: false, filterType: 'text', width: 110, maxLength: 12, digits: 12, headerAliases:['sap id', 'sapid', 'sap', 'sap no', 'sap no.', 'sap number', 'sap asset id', 'sap asset no', 'sap asset number', 'sap code'] },
+  { key: 'sapId', label: 'SAP ID', type: 'text', group: 'identification', required: false, filterType: 'text', width: 110, maxLength: 12, digits: 12, headerAliases: ['sap id', 'sapid', 'sap', 'sap no', 'sap no.', 'sap number', 'sap asset id', 'sap asset no', 'sap asset number', 'sap code'] },
 
   { key: 'type', label: 'Asset Type', type: 'select', group: 'identification', required: true, filterType: 'select', options: SEED_OPTIONS.type, width: 110, headerAliases: ['type', 'asset type', 'peripheral type'] },
   { key: 'assetTag', label: 'Computer / Asset Name', type: 'text', group: 'identification', required: true, filterType: 'text', width: 170, headerAliases: ['computer name', 'asset name', 'computer/asset name', 'hostname', 'peripheral name', 'software name'] },
@@ -192,32 +192,26 @@ export function emptyAsset(registerKey = ASSET) {
   return out;
 }
 
+// A clone (Report Clone, Verification Clone, Submit & Clone) starts these
+// blank -- they belong to one device or one person. Everything else is
+// copied from the original, and every field of the cloned form is editable.
 export const CLONE_BLANK_KEYS = [
   'srl', 'sapId', 'assetTag', 'description', 'user', 'email',
   'warrantyEnd', 'insuranceEnd', 'assignedDate', 'linkedPeripheralsText',
 ];
 
-export const CLONE_PREFILLED_KEYS = [
-  'status', 'location', 'floor', 'department', 'company',
-];
-
 const CLONE_BLANK = new Set(CLONE_BLANK_KEYS);
-const CLONE_EDITABLE = new Set([...CLONE_BLANK_KEYS, ...CLONE_PREFILLED_KEYS]);
 
 export function isCloneBlank(key) {
   return CLONE_BLANK.has(key);
-}
-
-export function isCloneEditable(key) {
-  return CLONE_EDITABLE.has(key);
 }
 
 export function cloneAsset(record, registerKey = ASSET) {
   const out = {};
   (fieldsOf(registerKey) ? columnsFor(registerKey) : COLUMNS.filter((col) => col.onlyIn !== SOFTWARE))
     .forEach((col) => {
-    const blanked = isCloneBlank(col.key) || col.generated;
-    out[col.key] = blanked ? '' : (record?.[col.key] ?? '');
-  });
+      const blanked = isCloneBlank(col.key) || col.generated;
+      out[col.key] = blanked ? '' : (record?.[col.key] ?? '');
+    });
   return out;
 }

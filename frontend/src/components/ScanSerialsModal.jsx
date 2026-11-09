@@ -25,7 +25,7 @@ const ScanSerialsModal = ({ queue, onClose, onFinished }) => {
   const quietTimerRef = useRef(null);
   const savingRef = useRef(false);
   const scannedHereRef = useRef(new Map());
-  const commitRef = useRef(() => {});
+  const commitRef = useRef(() => { });
 
   const current = queue[index] || null;
   const done = index >= queue.length;
@@ -52,7 +52,7 @@ const ScanSerialsModal = ({ queue, onClose, onFinished }) => {
 
   const finish = () => {
     resetBurst();
-    if (saved.length) refresh().catch(() => {  });
+    if (saved.length) refresh().catch(() => { });
     onFinished({ saved: saved.length, skipped });
   };
 

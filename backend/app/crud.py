@@ -756,7 +756,7 @@ EVENT_ACTIONS = [EVENT_CREATED, EVENT_IMPORTED, EVENT_UPDATED, EVENT_DELETED,
 ACTIVITY_OUTCOMES = ["ok", "failed"]
 
 ACTIVITY_CATEGORIES = ["auth", "users", "masters", "asset", "peripheral", "software",
-                       "verification", "assistant", "notifications"]
+                       "verification", "assistant", "notifications", "admin_controls"]
 
 
 def record_activity(
@@ -789,6 +789,12 @@ def record_activity(
     )
     db.add(row)
     db.commit()
+    from flask import has_request_context
+    if not has_request_context():
+        # A background job's entry. Inside a request, live.install's hook
+        # already notes the change once the response is ready.
+        from app import live
+        live.bump(live.ACTIVITY)
     return row
 
 

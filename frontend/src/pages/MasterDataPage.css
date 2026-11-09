@@ -76,7 +76,9 @@
   cursor: pointer;
 }
 
-.master-sublist:hover { color: var(--text-primary); }
+.master-sublist:hover {
+  color: var(--text-primary);
+}
 
 .master-sublist.active {
   background: var(--accent-soft-strong);

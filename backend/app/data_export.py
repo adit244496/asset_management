@@ -299,6 +299,8 @@ def clear_activity(db: Session, cfg: NotificationSettings, cutoff: datetime) -> 
     deleted = db.execute(delete(ActivityLog).where(ActivityLog.at <= cutoff)).rowcount or 0
     cfg.activity_cleared_at = cutoff.astimezone(timezone.utc).isoformat()
     db.commit()
+    from app import live
+    live.bump(live.ACTIVITY, live.SETTINGS)
     return deleted
 
 

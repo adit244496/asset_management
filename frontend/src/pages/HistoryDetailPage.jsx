@@ -10,6 +10,7 @@ import { useAssets } from '../context/AssetsContext';
 import { useAuth } from '../context/AuthContext';
 import { formatDate } from '../lib/dates';
 import { groupEvents } from '../lib/historyGroups';
+import { REGISTER_TOPICS, useLiveTick } from '../lib/live';
 import '../components/AssetHistory.css';
 import './HistoryDetailPage.css';
 
@@ -34,6 +35,7 @@ const HistoryDetailPage = () => {
   const [data, setData] = useState(null);
   const [banner, setBanner] = useState(null);
   const [openIds, setOpenIds] = useState(() => new Set());
+  const liveTick = useLiveTick(REGISTER_TOPICS);
 
   useEffect(() => {
     let live = true;
@@ -45,7 +47,7 @@ const HistoryDetailPage = () => {
         }
       });
     return () => { live = false; };
-  }, [assetPk, assetHistory]);
+  }, [assetPk, assetHistory, liveTick]);
 
   const asset = data?.asset;
   const events = useMemo(() => data?.items || [], [data]);

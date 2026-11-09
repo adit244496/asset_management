@@ -112,8 +112,15 @@
 }
 
 @keyframes kpi-reveal {
-  from { opacity: 0; transform: translateY(-6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @media (max-width: 640px) and (prefers-reduced-motion: reduce) {
@@ -121,6 +128,7 @@
     animation: none;
   }
 }
+
 /* Phones: three compact tiles per row. */
 @media (max-width: 640px) {
   .kpi-row {

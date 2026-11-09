@@ -231,14 +231,14 @@ const MasterWorkbookUpload = ({ categories, onClose, onDone }) => {
                 <tbody>
                   {categories.filter((cat) => result.lists?.[cat.key]).map(({ key }) => [key, result.lists[key]])
                     .map(([key, c]) => (
-                    <tr key={key}>
-                      <td>{plural(key)}</td>
-                      <td>{c.added}</td>
-                      <td>{c.updated}</td>
-                      <td>{c.unchanged}</td>
-                      <td>{c.skipped}</td>
-                    </tr>
-                  ))}
+                      <tr key={key}>
+                        <td>{plural(key)}</td>
+                        <td>{c.added}</td>
+                        <td>{c.updated}</td>
+                        <td>{c.unchanged}</td>
+                        <td>{c.skipped}</td>
+                      </tr>
+                    ))}
                   {userCounts && (
                     <tr>
                       <td>{USERS_SHEET}</td>

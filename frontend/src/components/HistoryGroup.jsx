@@ -112,8 +112,8 @@ const HistoryGroup = ({
           {group.actor && <> · {group.actor}</>}
           {group.events[0]?.assetId && assetNumber
             && group.events[0].assetId !== assetNumber && (
-            <> · recorded as {group.events[0].assetId}</>
-          )}
+              <> · recorded as {group.events[0].assetId}</>
+            )}
         </div>
       </div>
     </li>

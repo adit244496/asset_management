@@ -21,7 +21,7 @@ const SellModal = ({ record, onClose, onDone }) => {
       .catch(() => { if (live) setPeople([]); });
     api.get('/notifications/mode')
       .then((res) => { if (live) setMode(res.data?.mode || 'off'); })
-      .catch(() => {});
+      .catch(() => { });
     return () => { live = false; };
   }, []);
 

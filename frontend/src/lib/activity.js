@@ -11,6 +11,7 @@ export const CATEGORY_LABELS = {
   verification: 'Verification',
   assistant: 'Assistant',
   notifications: 'Email & approvals',
+  admin_controls: 'Admin controls',
   data: 'All data',
   assets: 'Assets',
   peripherals: 'Peripherals',

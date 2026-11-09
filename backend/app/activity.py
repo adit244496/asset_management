@@ -41,6 +41,9 @@ ACTION_WORDING = {
     "masters.update_master": "Edited master value",
     "masters.delete_master": "Removed master value",
     "data.clear_all_data": "CLEARED ALL DATA",
+    "admin_controls.save_settings": "Saved the AI assistant settings",
+    "admin_controls.remove_key": "Removed an AI API key",
+    "admin_controls.test_connection": "Tested the AI connection",
 }
 
 REGISTER_WORDING = {

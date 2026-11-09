@@ -28,6 +28,7 @@ import { useMasters } from '../context/MastersContext';
 import { getDatePresets } from '../lib/datePresets';
 import { formatDate, isStoredDate, istParts } from '../lib/dates';
 import { exportCSV, exportXLSX } from '../lib/exporters';
+import { TOPIC, useLiveTick } from '../lib/live';
 import { NOT_RECORDED, isNotRecorded, joinRecorded } from '../lib/notRecorded';
 import {
   NORMAL, ariaSort, nextSort, sortGlyph, sortHint, sortRows,
@@ -150,6 +151,37 @@ function getAvatarColor(name) {
   return colors[Math.abs(hash) % colors.length];
 }
 
+// The Description column stays narrow: a long description shows its first
+// DESCRIPTION_PREVIEW characters and a "…" button; the full text opens in
+// place, wrapped, with "less" to fold it again.
+const DESCRIPTION_PREVIEW = 20;
+const DESCRIPTION_MIN_PX = 170;
+
+const ExpandableText = ({ text, label = 'description' }) => {
+  const [open, setOpen] = useState(false);
+  const value = String(text ?? '');
+  if (value.length <= DESCRIPTION_PREVIEW) return value;
+  const flip = (e) => { e.stopPropagation(); setOpen((v) => !v); };
+  const keepKeys = (e) => { if (e.key === 'Enter' || e.key === ' ') e.stopPropagation(); };
+  return (
+    <span className={`cell-expand${open ? ' is-open' : ''}`} title={open ? undefined : value}>
+      {open ? value : value.slice(0, DESCRIPTION_PREVIEW).trimEnd()}
+      <button
+        type="button"
+        className="cell-expand-btn"
+        onClick={flip}
+        onKeyDown={keepKeys}
+        onPointerDown={(e) => e.stopPropagation()}
+        aria-expanded={open}
+        aria-label={open ? `Show less of the ${label}` : `Show the full ${label}`}
+        title={open ? 'Show less' : `Show the full ${label}`}
+      >
+        {open ? 'less' : '…'}
+      </button>
+    </span>
+  );
+};
+
 const ReportPage = () => {
   const {
     assets, loading, deleteAssets, filterOptionsFor, optionsFor, register, meta,
@@ -208,13 +240,14 @@ const ReportPage = () => {
   const [valueMenuOpen, setValueMenuOpen] = useState(false);
   const [dateRangeMenuOpen, setDateRangeMenuOpen] = useState(false);
   const [notifyMode, setNotifyMode] = useState('off');
+  const settingsTick = useLiveTick(TOPIC.settings);
   useEffect(() => {
     let live = true;
     api.get('/notifications/mode')
       .then((res) => { if (live) setNotifyMode(res.data?.mode || 'off'); })
-      .catch(() => {  });
+      .catch(() => { });
     return () => { live = false; };
-  }, []);
+  }, [settingsTick]);
   const exportRef = useRef(null);
   const fieldRef = useRef(null);
   const valueRef = useRef(null);
@@ -262,7 +295,7 @@ const ReportPage = () => {
       navigate(location.pathname, { replace: true, state: null });
     }
   }, [location.pathname, location.state?.search, location.state?.ageBand,
-    location.state?.assistantReport, navigate]);
+  location.state?.assistantReport, navigate]);
 
   const setFilter = (key, patch) => {
     setFilters((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
@@ -408,7 +441,9 @@ const ReportPage = () => {
   };
 
   const handleClone = (row) => {
-    navigate('/data-entry', { state: { cloneValues: cloneAsset(row, register) } });
+    navigate('/data-entry', {
+      state: { cloneValues: cloneAsset(row, register), cloneRegister: register, cloneFrom: row.assetId },
+    });
   };
 
   const handleBulkDelete = async () => {
@@ -423,7 +458,7 @@ const ReportPage = () => {
       setBanner({
         text: soldCount
           ? `The selected ${soldCount === 1 ? meta.one : meta.many} ${soldCount === 1 ? 'was' : 'were'} sold, `
-            + 'and a sold record cannot be scrapped. Nothing was changed.'
+          + 'and a sold record cannot be scrapped. Nothing was changed.'
           : `Every selected ${meta.one} is already deleted. Nothing was changed.`,
         kind: 'error',
       });
@@ -431,7 +466,7 @@ const ReportPage = () => {
     }
     const soldNote = soldCount
       ? `\n\n${soldCount} sold ${soldCount === 1 ? meta.one : meta.many} in the selection `
-        + `${soldCount === 1 ? 'is' : 'are'} left out — a sold record cannot be scrapped.`
+      + `${soldCount === 1 ? 'is' : 'are'} left out — a sold record cannot be scrapped.`
       : '';
 
     const what = live.length === 1
@@ -1025,7 +1060,7 @@ const ReportPage = () => {
                     <th
                       key={col.key}
                       className={`sortable${sort.key === col.key ? ' sorted' : ''}`}
-                      style={{ minWidth: `${col.width || 120}px` }}
+                      style={{ minWidth: `${col.key === 'description' ? DESCRIPTION_MIN_PX : (col.width || 120)}px` }}
                       aria-sort={ariaSort(sort, col.key)}
                       title={sortHint(sort, col.key, col.key === 'site' ? 'Site / Floor' : col.label)}
                       onClick={() => toggleSort(col.key)}
@@ -1136,16 +1171,16 @@ const ReportPage = () => {
 
                     {isSoftware && canWrite && !row.isDeleted && !row.pendingApproval
                       && !/sold/i.test(String(row.status || '')) && (
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        title={isInStockStatus(row.status) ? 'Assign from stock' : 'Move to stock'}
-                        aria-label={isInStockStatus(row.status) ? 'Assign from stock' : 'Move to stock'}
-                        onClick={() => setMoving({ row, action: isInStockStatus(row.status) ? 'assign' : 'stock' })}
-                      >
-                        {isInStockStatus(row.status) ? <UserPlus size={13} /> : <ArrowDownToLine size={13} />}
-                      </button>
-                    )}
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title={isInStockStatus(row.status) ? 'Assign from stock' : 'Move to stock'}
+                          aria-label={isInStockStatus(row.status) ? 'Assign from stock' : 'Move to stock'}
+                          onClick={() => setMoving({ row, action: isInStockStatus(row.status) ? 'assign' : 'stock' })}
+                        >
+                          {isInStockStatus(row.status) ? <UserPlus size={13} /> : <ArrowDownToLine size={13} />}
+                        </button>
+                      )}
 
                     {isSuperadmin && row.isDeleted && (
                       <button
@@ -1315,6 +1350,16 @@ const ReportPage = () => {
                       return (
                         <td key={col.key}>
                           {formatSiteWithFloor(row) || <span className="cell-empty">{NOT_RECORDED}</span>}
+                        </td>
+                      );
+                    }
+
+                    if (col.key === 'description') {
+                      return (
+                        <td key={col.key} className="desc-cell">
+                          {isNotRecorded(row.description)
+                            ? <span className="cell-empty">{NOT_RECORDED}</span>
+                            : <ExpandableText text={row.description} />}
                         </td>
                       );
                     }

@@ -142,12 +142,32 @@
     content: "● ";
   }
 
-  .act-report-table .c-when { width: 13%; white-space: nowrap; }
-  .act-report-table .c-who { width: 11%; }
-  .act-report-table .c-role { width: 10%; color: #444; }
-  .act-report-table .c-area { width: 9%; color: #444; }
-  .act-report-table .c-what { width: 48%; }
-  .act-report-table .c-outcome { width: 9%; }
+  .act-report-table .c-when {
+    width: 13%;
+    white-space: nowrap;
+  }
+
+  .act-report-table .c-who {
+    width: 11%;
+  }
+
+  .act-report-table .c-role {
+    width: 10%;
+    color: #444;
+  }
+
+  .act-report-table .c-area {
+    width: 9%;
+    color: #444;
+  }
+
+  .act-report-table .c-what {
+    width: 48%;
+  }
+
+  .act-report-table .c-outcome {
+    width: 9%;
+  }
 
   .act-report-foot {
     margin-top: 10pt;

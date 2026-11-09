@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { errorMessage } from '../api';
 import { useAssets } from '../context/AssetsContext';
 import { groupEvents } from '../lib/historyGroups';
+import { topicOfRegister, useLiveTick } from '../lib/live';
 import HistoryGroup from './HistoryGroup';
 import './AssetHistory.css';
 
@@ -11,6 +12,7 @@ const AssetHistory = ({ assetId, assetNumber, register = null }) => {
   const [events, setEvents] = useState(null);
   const [error, setError] = useState('');
   const [openIds, setOpenIds] = useState(() => new Set());
+  const liveTick = useLiveTick(topicOfRegister(reg));
 
   useEffect(() => {
     let live = true;
@@ -18,7 +20,7 @@ const AssetHistory = ({ assetId, assetNumber, register = null }) => {
       .then((res) => { if (live) setEvents(res.items || []); })
       .catch((err) => { if (live) setError(errorMessage(err, 'Could not load the history.')); });
     return () => { live = false; };
-  }, [assetId, assetHistory, reg]);
+  }, [assetId, assetHistory, reg, liveTick]);
 
   const groups = useMemo(
     () => groupEvents(events || [], { register: reg }),

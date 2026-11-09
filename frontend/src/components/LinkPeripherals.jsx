@@ -113,10 +113,14 @@ const LinkPeripherals = forwardRef(({ value = [], onChange, disabled = false, hi
       if (on.length) {
         const names = on.map((a) => a.assetId).filter(Boolean).join(', ') || 'another asset';
         setNote(out.item.isSharedType
-          ? { text: `${label(out.item)} is also on ${names}. It is a shared type, so it `
-              + 'stays there as well.', kind: 'info' }
-          : { text: `${label(out.item)} is currently on ${names}. Saving will move it here.`,
-              kind: 'warning' });
+          ? {
+            text: `${label(out.item)} is also on ${names}. It is a shared type, so it `
+              + 'stays there as well.', kind: 'info'
+          }
+          : {
+            text: `${label(out.item)} is currently on ${names}. Saving will move it here.`,
+            kind: 'warning'
+          });
       }
     } finally {
       setBusy(false);

@@ -67,12 +67,15 @@ def _own_conversation(db, user, conversation_id):
 @bp.route("/status", methods=["GET"])
 @token_required
 def status(current_user):
-    return jsonify({
-        "aiEnabled": engine.ai_enabled(),
+    on = engine.ai_enabled()
+    response = jsonify({
+        "aiEnabled": on,
         "canMakeChanges": roles.can_write(current_user.role),
-        "provider": engine.provider().NAME if engine.ai_enabled() else None,
-        "model": engine.model_name() if engine.ai_enabled() else None,
+        "provider": engine.provider().NAME if on else None,
+        "model": engine.model_name() if on else None,
     })
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @bp.route("/guide", methods=["GET"])

@@ -11,6 +11,7 @@ import UsersPanel from '../components/UsersPanel';
 import { useAuth } from '../context/AuthContext';
 import { useMasters } from '../context/MastersContext';
 import { EMPTY_FILTER, applyFieldFilter, isFiltering } from '../lib/fieldFilter';
+import { TOPIC, useLiveEvent } from '../lib/live';
 import { masterHaystack } from '../lib/masterSearch';
 import { downloadMasterWorkbook } from '../lib/masterWorkbook';
 import { registerOf } from '../lib/registers';
@@ -48,25 +49,30 @@ const MasterDataPage = ({ initialTab = null }) => {
   const showingUsers = active === USERS_TAB;
   const showingNotify = active === NOTIFY_TAB;
 
-  const load = useCallback(async (key) => {
+  const load = useCallback(async (key, { quiet = false } = {}) => {
     if (!key || key === USERS_TAB || key === NOTIFY_TAB) return;
-    setLoading((prev) => (prev ? prev : true));
+    if (!quiet) setLoading((prev) => (prev ? prev : true));
     try {
       const res = await api.get(`/masters/${encodeURIComponent(key)}?includeInactive=true`);
       setRows(res.data?.items || []);
     } catch (err) {
+      if (quiet) return;
       setBanner({ text: errorMessage(err, 'Could not load this master table.'), kind: 'error' });
       setRows([]);
     } finally {
-      setLoading(false);
+      if (!quiet) setLoading(false);
     }
   }, []);
 
   useEffect(() => { load(active); }, [active, load]);
 
+  // Someone else changed a master list: refresh the table shown, quietly.
+  // An open add/edit dialog keeps its own copy, so typing is not disturbed.
+  useLiveEvent(TOPIC.masters, () => { load(active, { quiet: true }); });
+
   const refreshAll = useCallback(async () => {
     await load(active);
-    reloadMasters().catch(() => {  });
+    reloadMasters().catch(() => { });
   }, [active, load, reloadMasters]);
 
   const selectCategory = (key) => {
@@ -143,7 +149,7 @@ const MasterDataPage = ({ initialTab = null }) => {
       setBanner({
         text: row.isShared
           ? `A "${row.name}" now belongs to one asset at a time — linking one to another `
-            + 'asset will move it.'
+          + 'asset will move it.'
           : `A "${row.name}" can now be linked to several assets at once.`,
         kind: 'success',
       });
@@ -229,210 +235,210 @@ const MasterDataPage = ({ initialTab = null }) => {
           )}
         </div>
 
-      {!showingUsers && !showingNotify && <Banner banner={banner} onDismiss={() => setBanner(null)} />}
+        {!showingUsers && !showingNotify && <Banner banner={banner} onDismiss={() => setBanner(null)} />}
 
-      {!categories.length ? (
-        <div className="panel">
-          {loaded ? 'No master tables are configured on the server.' : 'Loading master tables…'}
-        </div>
-      ) : (
-        <>
-          <div className="master-tabs" role="tablist">
-            {tabCategories.map((c) => (
-              <button
-                key={c.key}
-                type="button"
-                role="tab"
-                aria-selected={c.key === activeTab}
-                className={`master-tab${c.key === activeTab ? ' active' : ''}`}
-                onClick={() => selectCategory(c.key)}
-              >
-                {tabLabel(c)}
-              </button>
-            ))}
-            <button
-              type="button"
-              role="tab"
-              aria-selected={showingUsers}
-              className={`master-tab master-tab-users${showingUsers ? ' active' : ''}`}
-              onClick={() => selectCategory(USERS_TAB)}
-            >
-              Users
-            </button>
-            {isSuperadmin && (
-              <button
-                type="button"
-                role="tab"
-                aria-selected={showingNotify}
-                className={`master-tab${showingNotify ? ' active' : ''}`}
-                onClick={() => selectCategory(NOTIFY_TAB)}
-              >
-                Notifications
-              </button>
-            )}
+        {!categories.length ? (
+          <div className="panel">
+            {loaded ? 'No master tables are configured on the server.' : 'Loading master tables…'}
           </div>
-
-          {showingNotify ? <NotificationsPanel /> : showingUsers ? <UsersPanel /> : (
+        ) : (
           <>
-          {family.length > 1 && (
-            <div className="master-sublists" role="tablist" aria-label={`${tabLabel(family[0])} lists`}>
-              {family.map((c) => (
+            <div className="master-tabs" role="tablist">
+              {tabCategories.map((c) => (
                 <button
                   key={c.key}
                   type="button"
                   role="tab"
-                  aria-selected={c.key === active}
-                  className={`master-sublist${c.key === active ? ' active' : ''}`}
+                  aria-selected={c.key === activeTab}
+                  className={`master-tab${c.key === activeTab ? ' active' : ''}`}
                   onClick={() => selectCategory(c.key)}
                 >
-                  {subLabel(c)}
+                  {tabLabel(c)}
                 </button>
               ))}
-            </div>
-          )}
-          <FieldFilterBar
-            key={active}
-            fields={filterFields}
-            value={filter}
-            onChange={setFilter}
-            allPlaceholder={`Search ${spec?.plural?.toLowerCase() || 'values'}…`}
-          >
-            <span className="master-meta">
-              {searching && `${shown.length.toLocaleString('en-IN')} of ${rows.length.toLocaleString('en-IN')} — `}
-              {activeCount.toLocaleString('en-IN')} active
-              {retiredCount > 0 && `, ${retiredCount.toLocaleString('en-IN')} retired`}
-            </span>
-            <div className="master-toolbar-actions">
-              <button type="button" className="btn-secondary master-create-btn" onClick={() => setBulkOpen(true)}>
-                <ListPlus size={14} /> Bulk Add
+              <button
+                type="button"
+                role="tab"
+                aria-selected={showingUsers}
+                className={`master-tab master-tab-users${showingUsers ? ' active' : ''}`}
+                onClick={() => selectCategory(USERS_TAB)}
+              >
+                Users
               </button>
-              <button type="button" className="btn-primary master-create-btn" onClick={openCreate}>
-                <Plus size={14} /> New {spec?.label || 'Value'}
-              </button>
+              {isSuperadmin && (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={showingNotify}
+                  className={`master-tab${showingNotify ? ' active' : ''}`}
+                  onClick={() => selectCategory(NOTIFY_TAB)}
+                >
+                  Notifications
+                </button>
+              )}
             </div>
-          </FieldFilterBar>
 
-          <div className="data-table-wrap master-table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>{spec?.label || 'Value'}</th>
-                  <th>Description</th>
-                  {isTypes && <th>Shared</th>}
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading && (
-                  <tr><td className="table-empty" colSpan={colCount}>Loading&hellip;</td></tr>
-                )}
-                {!loading && rows.length === 0 && (
-                  <tr><td className="table-empty" colSpan={colCount}>No values yet.</td></tr>
-                )}
-                {!loading && rows.length > 0 && shown.length === 0 && (
-                  <tr>
-                    <td className="table-empty" colSpan={colCount}>
-                      Nothing matches {filter.query.trim()
-                        ? <>&ldquo;{filter.query.trim()}&rdquo;</> : 'these filters'}.{' '}
-                      <button type="button" className="users-empty-clear" onClick={() => setFilter(EMPTY_FILTER)}>
-                        Clear the filters
-                      </button>
-                    </td>
-                  </tr>
-                )}
-                {!loading && shown.map((row) => (
-                  <tr key={row.id} className={row.isActive ? undefined : 'row-retired'}>
-                    <td>{row.name}</td>
-                    <td className="master-desc">{row.description || ''}</td>
-                    {isTypes && (
-                      <td>
-                        <label className="master-shared" title={row.isShared
-                          ? `A ${row.name} can be linked to several assets at once.`
-                          : `A ${row.name} belongs to one asset at a time — linking it `
-                            + 'to another moves it.'}>
-                          <input
-                            type="checkbox"
-                            checked={Boolean(row.isShared)}
-                            disabled={busyId === row.id}
-                            onChange={() => toggleShared(row)}
-                          />
-                          <span>{row.isShared ? 'Several assets' : 'One at a time'}</span>
-                        </label>
-                      </td>
-                    )}
-                    <td className="actions-cell">
+            {showingNotify ? <NotificationsPanel /> : showingUsers ? <UsersPanel /> : (
+              <>
+                {family.length > 1 && (
+                  <div className="master-sublists" role="tablist" aria-label={`${tabLabel(family[0])} lists`}>
+                    {family.map((c) => (
                       <button
+                        key={c.key}
                         type="button"
-                        className="icon-btn"
-                        title="Edit"
-                        aria-label="Edit"
-                        onClick={() => openEdit(row)}
+                        role="tab"
+                        aria-selected={c.key === active}
+                        className={`master-sublist${c.key === active ? ' active' : ''}`}
+                        onClick={() => selectCategory(c.key)}
                       >
-                        <Pencil size={13} />
+                        {subLabel(c)}
                       </button>
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        disabled={busyId === row.id}
-                        title={row.isActive ? 'Retire — hide from the asset form' : 'Reactivate'}
-                        aria-label={row.isActive ? 'Retire' : 'Reactivate'}
-                        onClick={() => toggleActive(row)}
-                      >
-                        {row.isActive ? <EyeOff size={13} /> : <Eye size={13} />}
-                      </button>
-                      {isSuperadmin && (
-                        <button
-                          type="button"
-                          className="icon-btn icon-btn-danger"
-                          disabled={busyId === row.id || (row.inUse || 0) > 0}
-                          title={(row.inUse || 0) > 0
-                            ? `Used by ${row.inUse} asset(s) — retire it instead of deleting`
-                            : 'Delete'}
-                          aria-label="Delete"
-                          onClick={() => handleDelete(row)}
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                    ))}
+                  </div>
+                )}
+                <FieldFilterBar
+                  key={active}
+                  fields={filterFields}
+                  value={filter}
+                  onChange={setFilter}
+                  allPlaceholder={`Search ${spec?.plural?.toLowerCase() || 'values'}…`}
+                >
+                  <span className="master-meta">
+                    {searching && `${shown.length.toLocaleString('en-IN')} of ${rows.length.toLocaleString('en-IN')} — `}
+                    {activeCount.toLocaleString('en-IN')} active
+                    {retiredCount > 0 && `, ${retiredCount.toLocaleString('en-IN')} retired`}
+                  </span>
+                  <div className="master-toolbar-actions">
+                    <button type="button" className="btn-secondary master-create-btn" onClick={() => setBulkOpen(true)}>
+                      <ListPlus size={14} /> Bulk Add
+                    </button>
+                    <button type="button" className="btn-primary master-create-btn" onClick={openCreate}>
+                      <Plus size={14} /> New {spec?.label || 'Value'}
+                    </button>
+                  </div>
+                </FieldFilterBar>
+
+                <div className="data-table-wrap master-table-wrap">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>{spec?.label || 'Value'}</th>
+                        <th>Description</th>
+                        {isTypes && <th>Shared</th>}
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {loading && (
+                        <tr><td className="table-empty" colSpan={colCount}>Loading&hellip;</td></tr>
                       )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      {!loading && rows.length === 0 && (
+                        <tr><td className="table-empty" colSpan={colCount}>No values yet.</td></tr>
+                      )}
+                      {!loading && rows.length > 0 && shown.length === 0 && (
+                        <tr>
+                          <td className="table-empty" colSpan={colCount}>
+                            Nothing matches {filter.query.trim()
+                              ? <>&ldquo;{filter.query.trim()}&rdquo;</> : 'these filters'}.{' '}
+                            <button type="button" className="users-empty-clear" onClick={() => setFilter(EMPTY_FILTER)}>
+                              Clear the filters
+                            </button>
+                          </td>
+                        </tr>
+                      )}
+                      {!loading && shown.map((row) => (
+                        <tr key={row.id} className={row.isActive ? undefined : 'row-retired'}>
+                          <td>{row.name}</td>
+                          <td className="master-desc">{row.description || ''}</td>
+                          {isTypes && (
+                            <td>
+                              <label className="master-shared" title={row.isShared
+                                ? `A ${row.name} can be linked to several assets at once.`
+                                : `A ${row.name} belongs to one asset at a time — linking it `
+                                + 'to another moves it.'}>
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(row.isShared)}
+                                  disabled={busyId === row.id}
+                                  onChange={() => toggleShared(row)}
+                                />
+                                <span>{row.isShared ? 'Several assets' : 'One at a time'}</span>
+                              </label>
+                            </td>
+                          )}
+                          <td className="actions-cell">
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              title="Edit"
+                              aria-label="Edit"
+                              onClick={() => openEdit(row)}
+                            >
+                              <Pencil size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              disabled={busyId === row.id}
+                              title={row.isActive ? 'Retire — hide from the asset form' : 'Reactivate'}
+                              aria-label={row.isActive ? 'Retire' : 'Reactivate'}
+                              onClick={() => toggleActive(row)}
+                            >
+                              {row.isActive ? <EyeOff size={13} /> : <Eye size={13} />}
+                            </button>
+                            {isSuperadmin && (
+                              <button
+                                type="button"
+                                className="icon-btn icon-btn-danger"
+                                disabled={busyId === row.id || (row.inUse || 0) > 0}
+                                title={(row.inUse || 0) > 0
+                                  ? `Used by ${row.inUse} asset(s) — retire it instead of deleting`
+                                  : 'Delete'}
+                                aria-label="Delete"
+                                onClick={() => handleDelete(row)}
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </>
-          )}
-        </>
-      )}
+        )}
 
-      {modalOpen && spec && (
-        <MasterOptionModal
-          category={spec.key}
-          label={spec.label}
-          option={modalOption}
-          onClose={() => { setModalOpen(false); setModalOption(null); }}
-          onSaved={handleSaved}
-        />
-      )}
+        {modalOpen && spec && (
+          <MasterOptionModal
+            category={spec.key}
+            label={spec.label}
+            option={modalOption}
+            onClose={() => { setModalOpen(false); setModalOption(null); }}
+            onSaved={handleSaved}
+          />
+        )}
 
-      {bulkOpen && spec && (
-        <MasterBulkAdd
-          category={spec.key}
-          label={spec.label}
-          plural={spec.plural}
-          existingNames={existingNames}
-          onClose={() => setBulkOpen(false)}
-          onDone={handleBulkDone}
-        />
-      )}
+        {bulkOpen && spec && (
+          <MasterBulkAdd
+            category={spec.key}
+            label={spec.label}
+            plural={spec.plural}
+            existingNames={existingNames}
+            onClose={() => setBulkOpen(false)}
+            onDone={handleBulkDone}
+          />
+        )}
 
-      {uploadOpen && (
-        <MasterWorkbookUpload
-          categories={categories}
-          onClose={() => setUploadOpen(false)}
-          onDone={handleAllDone}
-        />
-      )}
+        {uploadOpen && (
+          <MasterWorkbookUpload
+            categories={categories}
+            onClose={() => setUploadOpen(false)}
+            onDone={handleAllDone}
+          />
+        )}
 
       </div>
     </div>

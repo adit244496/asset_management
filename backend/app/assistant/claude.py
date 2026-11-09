@@ -5,6 +5,7 @@ try:
 except ImportError:  # pragma: no cover - depends on the environment
     anthropic = None
 
+from app.assistant import control
 from app.assistant import tools as T
 from app.assistant.prompt import SYSTEM_PROMPT
 from app.assistant.reply import Reply, ToolCall
@@ -12,18 +13,27 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-NAME = "anthropic"
+NAME = control.ANTHROPIC
 
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 BETAS = [FALLBACK_BETA, "thinking-binding-controls-2026-08-01"]
 
 LEGACY_MODEL_PREFIXES = ("claude-haiku-4-5",)
 
+TEST_TIMEOUT_SECONDS = 20.0
+
+# One client per (key, address): a key changed in Admin controls gets a fresh
+# client on the next question, without a restart.
 _client = None
+_client_for = None
 
 
 def model() -> str:
-    return settings.ASSISTANT_MODEL
+    return control.current().claude_model
+
+
+def _api_key() -> str:
+    return control.current().anthropic_key
 
 
 def _legacy(name: str | None = None) -> bool:
@@ -35,30 +45,59 @@ def available() -> bool:
 
 
 def configured() -> bool:
-    return bool(settings.ANTHROPIC_API_KEY or settings.ASSISTANT_BASE_URL)
+    return bool(_api_key() or settings.ASSISTANT_BASE_URL)
 
 
 def errors() -> tuple:
     return (anthropic.APIError,) if anthropic is not None else ()
 
 
+def _new_client(api_key: str, **options):
+    kwargs = dict(options)
+    if settings.ASSISTANT_BASE_URL:
+        kwargs["base_url"] = settings.ASSISTANT_BASE_URL
+    kwargs["api_key"] = api_key or "local-stand-in"
+    return anthropic.Anthropic(**kwargs)
+
+
 def client():
-    global _client
-    if _client is None:
-        kwargs = {"timeout": 120.0, "max_retries": 2}
-        if settings.ASSISTANT_BASE_URL:
-            kwargs["base_url"] = settings.ASSISTANT_BASE_URL
-        if settings.ANTHROPIC_API_KEY:
-            kwargs["api_key"] = settings.ANTHROPIC_API_KEY
-        elif settings.ASSISTANT_BASE_URL:
-            kwargs["api_key"] = "local-stand-in"
-        _client = anthropic.Anthropic(**kwargs)
+    global _client, _client_for
+    wanted = (_api_key(), settings.ASSISTANT_BASE_URL)
+    if _client is None or _client_for != wanted:
+        _client = _new_client(wanted[0], timeout=120.0, max_retries=2)
+        _client_for = wanted
     return _client
 
 
 def reset_client():
-    global _client
+    global _client, _client_for
     _client = None
+    _client_for = None
+
+
+def test(api_key: str, model_id: str) -> str:
+    """Check that the key is accepted and can see the model. Uses the Models
+    API, so it costs no tokens. Returns the model's display name."""
+    info = _new_client(api_key, timeout=TEST_TIMEOUT_SECONDS, max_retries=0).models.retrieve(model_id)
+    return getattr(info, "display_name", None) or getattr(info, "id", None) or model_id
+
+
+def explain_test(exc: Exception, model_id: str) -> str:
+    if anthropic is None:
+        return "The anthropic package is not installed on the server (pip install -r requirements.txt)."
+    if isinstance(exc, anthropic.AuthenticationError):
+        return "Anthropic refused the API key. Check that it was pasted whole and is still active."
+    if isinstance(exc, anthropic.PermissionDeniedError):
+        return f"This API key is not allowed to use {model_id}."
+    if isinstance(exc, anthropic.NotFoundError):
+        return f"Anthropic has no model called {model_id!r} for this key. Check the model ID."
+    if isinstance(exc, anthropic.RateLimitError):
+        return "The key works, but Anthropic is rate-limiting it right now. Try again in a minute."
+    if isinstance(exc, anthropic.APIConnectionError):
+        return "Could not reach Anthropic from the server. Check its internet access and firewall."
+    if isinstance(exc, anthropic.APIStatusError):
+        return f"Anthropic answered with an error ({exc.status_code}). Try again shortly."
+    return "The connection test failed."
 
 
 def user_turn(question: str, notes: list[str]) -> list[dict]:
@@ -137,7 +176,7 @@ def explain(exc: Exception) -> str:
     if isinstance(exc, anthropic.AuthenticationError):
         return "The AI assistant is not set up correctly -- its API key was refused. Tell your administrator."
     if isinstance(exc, anthropic.NotFoundError):
-        return ("The AI assistant is not set up correctly -- the model named in ASSISTANT_MODEL "
+        return ("The AI assistant is not set up correctly -- the Claude model set in Admin controls "
                 f"({model()}) does not exist. Tell your administrator.")
     if isinstance(exc, anthropic.PermissionDeniedError):
         return "The AI assistant's API key is not allowed to use this model. Tell your administrator."

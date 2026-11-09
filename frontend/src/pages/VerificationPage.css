@@ -52,7 +52,9 @@
   transition: background var(--transition-fast), color var(--transition-fast);
 }
 
-.verify-chip:hover { color: var(--text-primary); }
+.verify-chip:hover {
+  color: var(--text-primary);
+}
 
 .verify-chip.active {
   background: var(--surface-1);
@@ -93,7 +95,10 @@
   color: var(--text-secondary);
 }
 
-.verify-actions { display: flex; gap: 8px; }
+.verify-actions {
+  display: flex;
+  gap: 8px;
+}
 
 .verify-btn {
   display: inline-flex;
@@ -111,7 +116,9 @@
   text-align: center;
 }
 
-.verify-check input { cursor: pointer; }
+.verify-check input {
+  cursor: pointer;
+}
 
 .verify-id {
   font-family: var(--font-display);
@@ -153,9 +160,13 @@
   color: var(--text-primary);
 }
 
-.verify-state.is-rejected::before { background: var(--warning); }
+.verify-state.is-rejected::before {
+  background: var(--warning);
+}
 
-.verify-name { font-weight: 500; }
+.verify-name {
+  font-weight: 500;
+}
 
 table.verify-table td.verify-wrap {
   white-space: normal;
@@ -183,9 +194,14 @@ table.verify-table td .verify-note {
   color: var(--text-secondary);
 }
 
-table.verify-table td .verify-note.is-was { color: var(--text-muted); font-style: italic; }
+table.verify-table td .verify-note.is-was {
+  color: var(--text-muted);
+  font-style: italic;
+}
 
-.verify-note-by { color: var(--text-muted); }
+.verify-note-by {
+  color: var(--text-muted);
+}
 
 .verify-row-rejected td:first-child {
   box-shadow: inset 3px 0 0 var(--warning);
@@ -198,7 +214,9 @@ table.verify-table .verify-actions-col {
   box-shadow: inset 1px 0 0 var(--border);
 }
 
-table.verify-table thead .verify-actions-col { z-index: 2; }
+table.verify-table thead .verify-actions-col {
+  z-index: 2;
+}
 
 .verify-row-actions {
   display: flex;
@@ -228,7 +246,10 @@ table.verify-table thead .verify-actions-col { z-index: 2; }
   border-color: var(--accent);
 }
 
-.verify-act:disabled { opacity: 0.5; cursor: default; }
+.verify-act:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
 
 .verify-act.is-verify {
   border-color: var(--accent);
@@ -236,9 +257,13 @@ table.verify-table thead .verify-actions-col { z-index: 2; }
   color: var(--accent-ink);
 }
 
-.verify-act.is-verify:hover:not(:disabled) { background: var(--accent-hover); }
+.verify-act.is-verify:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
 
-.verify-act.is-danger { color: var(--critical); }
+.verify-act.is-danger {
+  color: var(--critical);
+}
 
 .verify-act.is-danger:hover:not(:disabled) {
   border-color: var(--critical);
@@ -274,7 +299,9 @@ table.verify-table thead .verify-actions-col { z-index: 2; }
   color: var(--text-muted);
 }
 
-.verify-modal { width: min(520px, 100%); }
+.verify-modal {
+  width: min(520px, 100%);
+}
 
 .verify-lede {
   margin-bottom: 12px;

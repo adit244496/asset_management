@@ -46,7 +46,7 @@ const SoftwareMoveModal = ({ record, action, onClose, onDone }) => {
       const where = !res.split
         ? `${record.assetId} is now ${assign ? `with ${who}` : 'in stock'}`
         : `${res.record.assetId} ${res.merged ? 'now holds them' : 'was created for them'}; `
-          + `${record.assetId} keeps ${res.source.quantity}`;
+        + `${record.assetId} keeps ${res.source.quantity}`;
       onDone(`${assign ? 'Assigned' : 'Moved'} ${n} of ${record.assetTag} to ${who}. ${where}.`);
     } catch (err) {
       setError(errorMessage(err, 'Could not move it.'));

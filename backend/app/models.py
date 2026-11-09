@@ -247,6 +247,31 @@ class AssistantProposal(Base):
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class AssistantSettings(Base):
+    """The AI assistant's set-up, managed by a superadmin under Admin controls.
+
+    One row (id 1). API keys are stored Fernet-encrypted and are never sent
+    back to the browser. The row is created on the first start, copying any
+    keys from backend/.env once; after that .env keys are ignored, so a key
+    removed here stays removed across restarts.
+    """
+    __tablename__ = "assistant_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    provider: Mapped[str] = mapped_column(String(20), nullable=False, default="gemini")
+    gemini_model: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+    claude_model: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+    gemini_key_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
+    anthropic_key_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
+    gemini_key_set_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    anthropic_key_set_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    imported_from_env: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    updated_by: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+
+
 class MasterBase(Base):
     __abstract__ = True
 

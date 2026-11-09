@@ -55,21 +55,43 @@
 }
 
 @keyframes link-per-glow {
-  0%, 100% { box-shadow: 0 0 0 0 transparent; }
-  50% { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 14px 1px var(--accent); }
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+
+  50% {
+    box-shadow: 0 0 0 3px var(--accent-soft), 0 0 14px 1px var(--accent);
+  }
 }
 
 @keyframes link-per-sweep {
-  from { background-position: 130% 0; }
-  to { background-position: -30% 0; }
+  from {
+    background-position: 130% 0;
+  }
+
+  to {
+    background-position: -30% 0;
+  }
 }
 
 @keyframes link-per-twinkle {
-  0%, 100% { opacity: 0; transform: scale(0.4) rotate(0deg); }
-  50% { opacity: 1; transform: scale(1.15) rotate(45deg); }
+
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(0.4) rotate(0deg);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.15) rotate(45deg);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .link-per-field.is-glaring,
   .link-per-field.is-glaring::after,
   .link-per-field.is-glaring::before {

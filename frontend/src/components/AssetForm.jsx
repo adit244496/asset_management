@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useAssets } from '../context/AssetsContext';
 import { isInStock } from '../lib/inventory';
 import { ASSET } from '../lib/registers';
-import { columnsFor, groupsFor, isCloneEditable } from '../lib/schema';
+import { columnsFor, groupsFor } from '../lib/schema';
 import AssignedUserField from './AssignedUserField';
 import BarcodeInput from './BarcodeInput';
 import DateInput from './DateInput';
@@ -11,7 +11,6 @@ import LinkPeripherals from './LinkPeripherals';
 const AssetForm = ({
   values, errors = {}, onChange, idPrefix = 'asset', register = null,
   linked = [], onLinkChange = null, linkDisabled = false, linkRef = null, linkHighlight = false,
-  cloning = false,
   originalStatus = null,
   onlyFields = null,
   fieldLabels = null,
@@ -40,8 +39,6 @@ const AssetForm = ({
   const isAssetForm = reg === ASSET;
   const nameCleared = isAssetForm && inStock && Boolean(originalStatus) && !isInStock(originalStatus);
   const optionalInStock = (key) => inStock && key === 'assetTag';
-
-  const lockedByClone = (col) => cloning && !col.generated && !isCloneEditable(col.key);
 
   const renderControl = (col) => {
     const id = `${idPrefix}_${col.key}`;
@@ -91,15 +88,6 @@ const AssetForm = ({
       );
     }
 
-    if (lockedByClone(col)) {
-      const shared = {
-        id, className: 'field-input field-locked', value, disabled: true, readOnly: true,
-      };
-      return col.type === 'textarea'
-        ? <textarea {...shared} rows={2} />
-        : <input {...shared} type="text" />;
-    }
-
     if (col.key === 'linkedPeripheralsText' && onLinkChange) {
       return (
         <LinkPeripherals
@@ -133,24 +121,24 @@ const AssetForm = ({
       const typedPrefix = sold && /^\s*sold(\s+to\b|\s*[-:])/i.test(String(value));
       return (
         <>
-        <AssignedUserField
-          id={id}
-          value={value}
-          email={values.email}
-          location={values.location}
-          invalid={invalid}
-          onChange={(v) => onChange(col.key, v)}
-          onEmailChange={(v) => onChange('email', v)}
-          onLocationChange={(v) => onChange('location', v)}
-          floor={values.floor}
-          onFloorChange={(v) => onChange('floor', v)}
-        />
-        {sold && (
-          <p className="field-hint">
-            Sold — enter the buyer’s name only; the status already says it was sold
-            {typedPrefix ? <> (“SOLD TO” will be dropped when you save)</> : null}.
-          </p>
-        )}
+          <AssignedUserField
+            id={id}
+            value={value}
+            email={values.email}
+            location={values.location}
+            invalid={invalid}
+            onChange={(v) => onChange(col.key, v)}
+            onEmailChange={(v) => onChange('email', v)}
+            onLocationChange={(v) => onChange('location', v)}
+            floor={values.floor}
+            onFloorChange={(v) => onChange('floor', v)}
+          />
+          {sold && (
+            <p className="field-hint">
+              Sold — enter the buyer’s name only; the status already says it was sold
+              {typedPrefix ? <> (“SOLD TO” will be dropped when you save)</> : null}.
+            </p>
+          )}
         </>
       );
     }

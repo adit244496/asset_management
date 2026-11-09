@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import api, { TOKEN_KEY } from '../api';
+import { TOPIC, useLiveEvent } from '../lib/live';
 import * as roles from '../lib/roles';
 
 const AuthContext = createContext(null);
@@ -21,7 +22,7 @@ export function AuthProvider({ children }) {
     api.get('/auth/me')
       .then((res) => { if (!cancelled) setUser(res.data); })
       .catch(() => {
-        try { localStorage.removeItem(TOKEN_KEY); } catch {  }
+        try { localStorage.removeItem(TOKEN_KEY); } catch { }
         if (!cancelled) setUser(null);
       })
       .finally(() => { if (!cancelled) setBootstrapping(false); });
@@ -35,21 +36,32 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener('iam:unauthorized', onUnauthorized);
   }, []);
 
+  // An account changed (perhaps this one: a new profile, or deactivated).
+  // Re-read who is signed in; a deactivated account is signed out by api.js.
+  useLiveEvent(TOPIC.users, () => {
+    if (!user) return;
+    api.get('/auth/me')
+      .then((res) => {
+        setUser((prev) => (prev && JSON.stringify(prev) !== JSON.stringify(res.data) ? res.data : prev));
+      })
+      .catch(() => { });
+  });
+
   const setSession = useCallback((accessToken, loggedIn) => {
-    try { localStorage.setItem(TOKEN_KEY, accessToken); } catch {  }
+    try { localStorage.setItem(TOKEN_KEY, accessToken); } catch { }
     setUser(loggedIn);
   }, []);
 
   const login = useCallback(async (username, password) => {
     const res = await api.post('/auth/login', { username, password });
     const { accessToken, user: loggedIn } = res.data;
-    try { localStorage.setItem(TOKEN_KEY, accessToken); } catch {  }
+    try { localStorage.setItem(TOKEN_KEY, accessToken); } catch { }
     setUser(loggedIn);
     return loggedIn;
   }, []);
 
   const logout = useCallback(() => {
-    try { localStorage.removeItem(TOKEN_KEY); } catch {  }
+    try { localStorage.removeItem(TOKEN_KEY); } catch { }
     setUser(null);
   }, []);
 

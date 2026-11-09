@@ -8,7 +8,7 @@
 }
 
 @media print {
-  body.asst-printing > *:not(.asst-report) {
+  body.asst-printing>*:not(.asst-report) {
     display: none !important;
   }
 

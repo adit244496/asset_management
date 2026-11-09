@@ -47,7 +47,7 @@ export function ThemeProvider({ children }) {
     ) {
       setTheme(next);
       document.documentElement.setAttribute('data-theme', next);
-      try { localStorage.setItem(THEME_KEY, next); } catch {  }
+      try { localStorage.setItem(THEME_KEY, next); } catch { }
       return;
     }
 
@@ -76,7 +76,7 @@ export function ThemeProvider({ children }) {
           setTheme(next);
         });
         document.documentElement.setAttribute('data-theme', next);
-        try { localStorage.setItem(THEME_KEY, next); } catch {  }
+        try { localStorage.setItem(THEME_KEY, next); } catch { }
       });
 
       transition.ready.then(() => {
@@ -98,7 +98,7 @@ export function ThemeProvider({ children }) {
     } catch {
       setTheme(next);
       document.documentElement.setAttribute('data-theme', next);
-      try { localStorage.setItem(THEME_KEY, next); } catch {  }
+      try { localStorage.setItem(THEME_KEY, next); } catch { }
     }
   }, [theme]);
 

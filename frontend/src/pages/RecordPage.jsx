@@ -14,6 +14,7 @@ import TransferModal from '../components/TransferModal';
 import { useAssets } from '../context/AssetsContext';
 import { useAuth } from '../context/AuthContext';
 import { isInStock } from '../lib/inventory';
+import { REGISTER_TOPICS, useLiveTick } from '../lib/live';
 import { ASSET, PERIPHERAL, SOFTWARE, isRegisterKey, registerOf } from '../lib/registers';
 import './RecordPage.css';
 
@@ -43,7 +44,12 @@ const RecordPage = () => {
     }
   }, [fetchRecord, id, register]);
 
-  useEffect(() => { load(); }, [load]);
+  // Changes by others show here as they happen -- held while a dialog on this
+  // record is open, so a half-filled form is never swapped out underneath.
+  const dialogOpen = Boolean(editing || transferring || selling || moving || qrIds);
+  const liveTick = useLiveTick(REGISTER_TOPICS, { paused: dialogOpen });
+
+  useEffect(() => { load(); }, [load, liveTick]);
 
   useEffect(() => { setRegister(register); }, [register, setRegister]);
 
@@ -78,14 +84,14 @@ const RecordPage = () => {
         <div className="record-actions">
           {canWrite && register === SOFTWARE && !record.isDeleted && !record.pendingApproval
             && !/sold/i.test(String(record.status || '')) && (isInStock(record.status) ? (
-            <button type="button" className="btn-primary" onClick={() => setMoving('assign')}>
-              <UserPlus size={14} /> Assign
-            </button>
-          ) : (
-            <button type="button" className="btn-primary" onClick={() => setMoving('stock')}>
-              <ArrowDownToLine size={14} /> Move to stock
-            </button>
-          ))}
+              <button type="button" className="btn-primary" onClick={() => setMoving('assign')}>
+                <UserPlus size={14} /> Assign
+              </button>
+            ) : (
+              <button type="button" className="btn-primary" onClick={() => setMoving('stock')}>
+                <ArrowDownToLine size={14} /> Move to stock
+              </button>
+            ))}
           {canWrite && register !== SOFTWARE && (spare ? (
             <button type="button" className="btn-primary" onClick={() => setTransferring(true)}>
               <UserPlus size={14} /> Assign
@@ -124,41 +130,41 @@ const RecordPage = () => {
       </div>
 
       {register !== SOFTWARE && (
-      <div className="panel record-linked">
-        <h2>
-          <Link2 size={15} />
-          {register === ASSET ? 'Linked peripherals' : 'Linked to'}
-          <span className="record-linked-count">{linked.length}</span>
-        </h2>
-        {linked.length === 0 ? (
-          <div className="record-linked-empty">
-            {register === ASSET
-              ? 'Nothing plugged into this asset yet. Scan a mouse, keyboard or dock '
+        <div className="panel record-linked">
+          <h2>
+            <Link2 size={15} />
+            {register === ASSET ? 'Linked peripherals' : 'Linked to'}
+            <span className="record-linked-count">{linked.length}</span>
+          </h2>
+          {linked.length === 0 ? (
+            <div className="record-linked-empty">
+              {register === ASSET
+                ? 'Nothing plugged into this asset yet. Scan a mouse, keyboard or dock '
                 + 'into Link Peripherals when you edit it.'
-              : 'This peripheral is not linked to an asset. Link it from the asset’s '
+                : 'This peripheral is not linked to an asset. Link it from the asset’s '
                 + 'own record.'}
-          </div>
-        ) : (
-          <ul className="record-chips">
-            {linked.map((item) => (
-              <li key={item.id}>
-                <Link
-                  className="record-chip"
-                  to={`/report/${linkedRegister}/${encodeURIComponent(item.id)}`}
-                >
-                  <span className="record-chip-id">{item.assetId}</span>
-                  <span className="record-chip-name">
-                    {item.label || item.assetTag || item.model}
-                  </span>
-                  <span className="record-chip-meta">
-                    {[item.type, item.model].filter(Boolean).join(' · ')}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+            </div>
+          ) : (
+            <ul className="record-chips">
+              {linked.map((item) => (
+                <li key={item.id}>
+                  <Link
+                    className="record-chip"
+                    to={`/report/${linkedRegister}/${encodeURIComponent(item.id)}`}
+                  >
+                    <span className="record-chip-id">{item.assetId}</span>
+                    <span className="record-chip-name">
+                      {item.label || item.assetTag || item.model}
+                    </span>
+                    <span className="record-chip-meta">
+                      {[item.type, item.model].filter(Boolean).join(' · ')}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
 
       {editing && (

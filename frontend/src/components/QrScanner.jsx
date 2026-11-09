@@ -63,7 +63,7 @@ const QrScanner = ({ onResult, onCancel }) => {
         listCameras();
         video.srcObject = granted;
         video.onloadeddata = () => setReady(true);
-        video.play().catch(() => {  });
+        video.play().catch(() => { });
         tick();
         return undefined;
       })

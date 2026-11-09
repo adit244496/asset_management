@@ -4,14 +4,16 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   Activity, Boxes, Check, ChevronDown, ClipboardCheck, Database, FilePlus2, FileText, History,
   Keyboard, Laptop, LayoutDashboard, LogOut, Menu, Moon, Package, RotateCcw, Search,
-  Sun, Trash2, X
+  ShieldCheck, Sun, Trash2, X
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useAssets } from '../context/AssetsContext';
 import api from '../api';
+import { TOPIC, useLiveTick } from '../lib/live';
 import { REGISTER_LIST } from '../lib/registers';
 import { VERIFICATION_EVENT } from '../lib/verification';
+import AdminControlsModal from './AdminControlsModal';
 import ClearAllModal from './ClearAllModal';
 import AppLogo from './AppLogo';
 import './TopNav.css';
@@ -300,6 +302,7 @@ const TopNav = () => {
 
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [clearOpen, setClearOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
   const [compact, setCompact] = useState(false);
@@ -458,6 +461,7 @@ const TopNav = () => {
   }).length || 0;
 
   const [waitingCount, setWaitingCount] = useState(0);
+  const verificationTick = useLiveTick(TOPIC.verification);
   useEffect(() => {
     if (!canVerify) return undefined;
     let live = true;
@@ -468,7 +472,7 @@ const TopNav = () => {
           const d = res.data || {};
           setWaitingCount(d.forYou ?? ((d.pending || 0) + (d.rejected || 0)));
         })
-        .catch(() => {  });
+        .catch(() => { });
     };
     fetchCount();
     window.addEventListener(VERIFICATION_EVENT, fetchCount);
@@ -476,7 +480,7 @@ const TopNav = () => {
       live = false;
       window.removeEventListener(VERIFICATION_EVENT, fetchCount);
     };
-  }, [canVerify, location.pathname]);
+  }, [canVerify, location.pathname, verificationTick]);
 
   const badgeFor = (kind) => (kind === 'verification' ? waitingCount : kind === 'stock' ? inStockCount : 0);
 
@@ -718,6 +722,19 @@ const TopNav = () => {
                   <div className="user-dropdown-role">{user?.role || 'Staff'}</div>
                 </div>
                 <div className="dropdown-divider" />
+                {isSuperadmin && (
+                  <>
+                    <button
+                      type="button"
+                      className="dropdown-item"
+                      onClick={() => { setUserDropdownOpen(false); setAdminOpen(true); }}
+                      title="AI assistant: provider, model and API keys"
+                    >
+                      <ShieldCheck size={14} /> Admin controls
+                    </button>
+                    <div className="dropdown-divider" />
+                  </>
+                )}
                 <button
                   type="button"
                   className="dropdown-item dropdown-item-danger"
@@ -743,6 +760,8 @@ const TopNav = () => {
       {clearOpen && (
         <ClearAllModal onClose={() => setClearOpen(false)} onCleared={handleCleared} />
       )}
+
+      {adminOpen && isSuperadmin && <AdminControlsModal onClose={() => setAdminOpen(false)} />}
 
       {drawerOpen && (
         <NavDrawer

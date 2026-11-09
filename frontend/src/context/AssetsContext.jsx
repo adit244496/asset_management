@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import api from '../api';
 import { ASSET, PERIPHERAL, REGISTER_KEYS, isRegisterKey, pathOf, registerOf } from '../lib/registers';
+import { REGISTER_TOPICS, topicOfRegister, useLiveEvent } from '../lib/live';
 import { COLUMNS, byKey } from '../lib/schema';
 import { useAuth } from './AuthContext';
 import { useMasters } from './MastersContext';
@@ -57,23 +58,38 @@ export function AssetsProvider({ children }) {
     setRegisterState(next);
     try {
       window.localStorage.setItem(REGISTER_STORAGE_KEY, next);
-    } catch {  }
+    } catch { }
   }, []);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
+  const refresh = useCallback(async ({ quiet = false } = {}) => {
+    if (!quiet) setLoading(true);
     try {
       const res = await api.get(`/${pathOf(register)}`);
       const items = (res.data?.items || []).map(normalizeAsset);
       setRows((prev) => ({ ...prev, [register]: items }));
       setError(null);
     } catch (err) {
-      setError(err);
+      if (!quiet) setError(err);
       throw err;
     } finally {
-      setLoading(false);
+      if (!quiet) setLoading(false);
     }
   }, [register]);
+
+  // Someone changed a register: re-fetch the one on screen quietly (no
+  // "Loading"), and forget the others so they load fresh when opened.
+  useLiveEvent(REGISTER_TOPICS, (changed) => {
+    if (!isAuthenticated) return;
+    const keys = REGISTER_KEYS.filter((k) => changed.includes(topicOfRegister(k)));
+    const others = keys.filter((k) => k !== register);
+    if (others.length) {
+      setRows((prev) => (others.some((k) => prev[k] !== null)
+        ? { ...prev, ...Object.fromEntries(others.map((k) => [k, null])) } : prev));
+    }
+    if (keys.includes(register) && rows[register] !== null) {
+      refresh({ quiet: true }).catch(() => { });
+    }
+  });
 
   const invalidateAll = useCallback(() => {
     setRows(emptyRows());
@@ -86,11 +102,11 @@ export function AssetsProvider({ children }) {
       return;
     }
     if (rows[register] !== null) return;
-    refresh().catch(() => {  });
+    refresh().catch(() => { });
   }, [isAuthenticated, register, rows, refresh]);
 
   const syncMasters = useCallback(() => {
-    reloadMasters().catch(() => {  });
+    reloadMasters().catch(() => { });
   }, [reloadMasters]);
 
   const base = `/${pathOf(register)}`;

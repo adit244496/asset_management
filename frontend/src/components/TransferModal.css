@@ -27,14 +27,17 @@
   align-items: center;
   gap: 10px;
 }
+
 .sw-move-qty .field-input {
   width: 110px;
 }
+
 .sw-move-of {
   font-size: 13px;
   color: var(--text-secondary);
   white-space: nowrap;
 }
+
 .sw-move-plan {
   margin-top: 4px;
   line-height: 1.5;

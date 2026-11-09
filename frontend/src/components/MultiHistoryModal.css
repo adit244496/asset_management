@@ -112,7 +112,7 @@
     flex-wrap: nowrap;
   }
 
-  .multi-hist-foot > .multi-hist-step {
+  .multi-hist-foot>.multi-hist-step {
     flex: none;
     padding: 0 12px;
   }

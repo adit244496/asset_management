@@ -15,6 +15,7 @@ import {
   QR_LIMIT, fetchReportRows, historyWhen, openInReportState, pdfColumns, reportFilename,
 } from '../lib/assistantReports';
 import { exportCSV, exportTableXLSX, exportXLSX } from '../lib/exporters';
+import { TOPIC, useLiveTick } from '../lib/live';
 import { AttentionCard, ReportCard, TableCard } from './AssistantCards';
 import AssistantReportPrint from './AssistantReportPrint';
 import QrCodesModal from './QrCodesModal';
@@ -56,13 +57,25 @@ const AssistantPanel = ({ canMakeChanges }) => {
       .catch(() => setStatus({ aiEnabled: false, canMakeChanges: false }));
   }, [open, status]);
 
+  // A superadmin changed the AI set-up (key removed, provider switched):
+  // show the new on/off state straight away. Whatever is typed stays put.
+  const aiTick = useLiveTick(TOPIC.assistant);
+  useEffect(() => {
+    if (!aiTick) return undefined;
+    let live = true;
+    api.get('/assistant/status')
+      .then((res) => { if (live) setStatus(res.data); })
+      .catch(() => { });
+    return () => { live = false; };
+  }, [aiTick]);
+
   useEffect(() => {
     if (!open || !status?.aiEnabled || loadedLatest) return;
     api.get('/assistant/conversations/latest')
       .then((res) => {
         if (res.status === 200 && res.data) setConversation(res.data);
       })
-      .catch(() => {  })
+      .catch(() => { })
       .finally(() => setLoadedLatest(true));
   }, [open, status, loadedLatest]);
 
@@ -174,7 +187,7 @@ const AssistantPanel = ({ canMakeChanges }) => {
       refresh?.();
     } catch (err) {
       const detail = errorMessage(err, 'The app refused the change.');
-      try { await api.post(`/assistant/proposals/${p.id}/outcome`, { outcome: 'failed', detail }); } catch {  }
+      try { await api.post(`/assistant/proposals/${p.id}/outcome`, { outcome: 'failed', detail }); } catch { }
       setProposalStatus(p.id, 'failed', detail);
     } finally {
       setActingOn(null);

@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Archive, ArrowLeftRight, CalendarClock, ClipboardCheck, Download, Mail, PackagePlus, RefreshCw, Send,
   Trash2, Undo2, UserPlus, Users, X,
 } from 'lucide-react';
 import api, { errorMessage } from '../api';
 import { formatDate, formatDateTime } from '../lib/dates';
+import { REGISTER_TOPICS, TOPIC, useLiveEvent } from '../lib/live';
 import Banner from './Banner';
 import './NotificationsPanel.css';
 
@@ -125,10 +126,33 @@ const NotificationsPanel = () => {
     }
   }, []);
 
+  // The settings as last loaded or saved. Someone else's save is shown here
+  // only while this form has no unsaved edits of its own.
+  const savedForm = useRef(EMPTY);
+  const formRef = useRef(form);
+  useEffect(() => { formRef.current = form; }, [form]);
+  const showSaved = useCallback((data) => {
+    const next = { ...EMPTY, ...data, smtpPassword: '' };
+    savedForm.current = next;
+    setForm(next);
+  }, []);
+
+  useLiveEvent([TOPIC.settings, ...REGISTER_TOPICS], (changed) => {
+    if (changed.includes(TOPIC.settings)) {
+      api.get('/notifications/settings')
+        .then((res) => {
+          if (JSON.stringify(formRef.current) === JSON.stringify(savedForm.current)) showSaved(res.data);
+        })
+        .catch(() => { });
+      api.get('/notifications/renewals').then((res) => setRenewals(res.data)).catch(() => { });
+    }
+    api.get('/approvals').then((res) => setRequests(res.data?.items || [])).catch(() => { });
+  });
+
   useEffect(() => {
     let live = true;
     api.get('/notifications/settings')
-      .then((res) => { if (live) setForm({ ...EMPTY, ...res.data, smtpPassword: '' }); })
+      .then((res) => { if (live) showSaved(res.data); })
       .catch((err) => { if (live) setBanner({ text: errorMessage(err, 'Could not load the settings.'), kind: 'error' }); })
       .finally(() => { if (live) setLoaded(true); });
     api.get('/approvals')
@@ -138,7 +162,7 @@ const NotificationsPanel = () => {
       .then((res) => { if (live) setRenewals(res.data); })
       .catch(() => { if (live) setRenewals({ upcoming: [] }); });
     return () => { live = false; };
-  }, []);
+  }, [showSaved]);
 
   const set = (key, value) => setForm((f) => ({ ...f, [key]: value }));
 
@@ -147,7 +171,7 @@ const NotificationsPanel = () => {
     setBanner(null);
     try {
       const res = await api.put('/notifications/settings', { ...form, ...extra });
-      setForm({ ...EMPTY, ...res.data, smtpPassword: '' });
+      showSaved(res.data);
       setBanner({ text: 'Notification settings saved.', kind: 'success' });
     } catch (err) {
       setBanner({ text: errorMessage(err, 'Could not save the settings.'), kind: 'error' });
@@ -191,7 +215,7 @@ const NotificationsPanel = () => {
         try {
           const body = JSON.parse(await err.response.data.text());
           if (body?.detail) text = [].concat(body.detail).join(' ');
-        } catch {  }
+        } catch { }
       }
       setBanner({ text, kind: 'error' });
     } finally {

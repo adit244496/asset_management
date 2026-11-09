@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { Copy } from 'lucide-react';
 import { errorMessage } from '../api';
 import AssetForm from '../components/AssetForm';
 import Banner from '../components/Banner';
@@ -9,43 +10,54 @@ import RegisterToggle from '../components/RegisterToggle';
 import { useAssets } from '../context/AssetsContext';
 import { useAuth } from '../context/AuthContext';
 import { ASSET, registerOf } from '../lib/registers';
-import { emptyAsset, validateAsset } from '../lib/schema';
+import { cloneAsset, emptyAsset, validateAsset } from '../lib/schema';
 import { notifyVerificationChanged } from '../lib/verification';
 import './DataEntryPage.css';
 
+const CLONE_HINT = 'Fill in what is blank — serial, name, description, who it is for, the '
+  + 'warranty and assigned dates, and any peripherals. Everything else is pre-filled from it '
+  + 'and can be changed.';
+
 const DataEntryPage = () => {
-  const { assets, createAsset, register, meta } = useAssets();
+  const {
+    assets, createAsset, register, meta, setRegister,
+  } = useAssets();
   const { isAdmin } = useAuth();
-  const isAssets = register === ASSET;
   const location = useLocation();
   const navigate = useNavigate();
   const cloneValues = location.state?.cloneValues;
+  const cloneFrom = location.state?.cloneFrom;
+  // Verification can clone a peripheral or software while another register
+  // is selected; switch to it without wiping the pre-filled form.
+  const cloneRegister = cloneValues && location.state?.cloneRegister;
+  const switchingTo = useRef(cloneRegister && cloneRegister !== register ? cloneRegister : null);
+  const formRegister = switchingTo.current || register;
+  const isAssets = formRegister === ASSET;
 
   const [values, setValues] = useState(() => (cloneValues
-    ? { ...emptyAsset(register), ...cloneValues } : emptyAsset(register)));
-  const [cloning, setCloning] = useState(() => !!cloneValues);
+    ? { ...emptyAsset(formRegister), ...cloneValues } : emptyAsset(formRegister)));
   const [errors, setErrors] = useState({});
   const [linked, setLinked] = useState([]);
   const linkRef = useRef(null);
   const [banner, setBanner] = useState(cloneValues
     ? {
-      text: 'Cloned. Fill in what is blank — serial, name, description, who it '
-        + 'is for, the warranty and joining dates, and any peripherals. Status, '
-        + 'location, floor, department and company are pre-filled but can be '
-        + 'changed; the rest is carried from the original and locked until the '
-        + 'new record exists.',
+      text: `Cloned${cloneFrom ? ` from ${cloneFrom}` : ''}. ${CLONE_HINT}`,
       kind: 'info',
       sticky: true,
     }
     : null);
   const [saving, setSaving] = useState(false);
-  const [poReminder, setPoReminder] = useState(false);
-  const poLabel = registerOf(register).labels.poNo || 'PO No.';
+  // Set while the "no PO number" reminder is open: { clone } says which
+  // button was pressed.
+  const [poReminder, setPoReminder] = useState(null);
+  const poLabel = registerOf(formRegister).labels.poNo || 'PO No.';
+  const one = registerOf(formRegister).label.replace(/s$/, '');
 
   useEffect(() => {
     if (cloneValues) {
       navigate(location.pathname, { replace: true, state: null });
     }
+    if (switchingTo.current) setRegister(switchingTo.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -53,6 +65,10 @@ const DataEntryPage = () => {
   useEffect(() => {
     if (firstRegister.current === register) return;
     firstRegister.current = register;
+    if (switchingTo.current === register) {
+      switchingTo.current = null;
+      return;
+    }
     resetForm();
     setBanner(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -64,29 +80,35 @@ const DataEntryPage = () => {
   };
 
   const resetForm = () => {
-    setValues(emptyAsset(register));
+    setValues(emptyAsset(formRegister));
     setErrors({});
     setLinked([]);
-    setCloning(false);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    const found = validateAsset(values, { register: assets, registerKey: register });
+  // `clone`: Submit & Clone -- save, then refill the form from the saved
+  // record, ready for the next device of the same batch.
+  const submit = async ({ clone = false } = {}) => {
+    if (saving) return;
+    const found = validateAsset(values, { register: assets, registerKey: formRegister });
     if (Object.keys(found).length) {
       setErrors(found);
       setBanner({ text: 'Please fix the highlighted fields before submitting.', kind: 'error' });
       return;
     }
     if (!String(values.poNo ?? '').trim()) {
-      setPoReminder(true);
+      setPoReminder({ clone });
       return;
     }
-    await save();
+    await save({ clone });
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    submit();
   };
 
   const backToPo = () => {
-    setPoReminder(false);
+    setPoReminder(null);
     setTimeout(() => {
       const box = document.getElementById('entry_poNo');
       box?.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -94,8 +116,8 @@ const DataEntryPage = () => {
     }, 0);
   };
 
-  const save = async () => {
-    setPoReminder(false);
+  const save = async ({ clone = false } = {}) => {
+    setPoReminder(null);
     let toLink = linked;
     if (isAssets && linkRef.current) {
       const flushed = await linkRef.current.flush();
@@ -116,23 +138,36 @@ const DataEntryPage = () => {
         isAssets ? { ...values, linkedPeripheralIds: toLink.map((p) => p.id) } : values,
       );
       setBanner({
-        text: `${meta.label.replace(/s$/, '')} "${created.assetTag || created.model}" `
+        text: `${one} "${created.assetTag || created.model}" `
           + `saved as ${created.assetId}.`
           + (created.verification === 'pending'
             ? ' It is waiting in Verification, and joins the register once another verifier '
-              + 'has checked it. If it is sent back, correct it there and it is resubmitted.'
+            + 'has checked it. If it is sent back, correct it there and it is resubmitted.'
             : '')
           + (created.acceptedBySapId
             ? ' It has a SAP ID, so it went straight into the register without verification.'
             : '')
           + (created.linkedPeripheralsText
             ? ` Linked ${created.linkedPeripherals.length} peripheral(s): `
-              + `${created.linkedPeripheralsText}.`
+            + `${created.linkedPeripheralsText}.`
             : '')
-          + (created.linkWarning ? ` ${created.linkWarning}` : ''),
+          + (created.linkWarning ? ` ${created.linkWarning}` : '')
+          + (clone ? ` The form is filled in from ${created.assetId} for the next one. ${CLONE_HINT}` : ''),
         kind: created.linkWarning ? 'info' : 'success',
+        sticky: clone || undefined,
       });
-      resetForm();
+      if (clone) {
+        setValues({ ...emptyAsset(formRegister), ...cloneAsset(created, formRegister) });
+        setErrors({});
+        setLinked([]);
+        setTimeout(() => {
+          const first = document.getElementById('entry_srl');
+          first?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          first?.focus({ preventScroll: true });
+        }, 0);
+      } else {
+        resetForm();
+      }
       notifyVerificationChanged();
     } catch (err) {
       setBanner({ text: errorMessage(err, `Could not save this ${meta.one}.`), kind: 'error' });
@@ -163,8 +198,7 @@ const DataEntryPage = () => {
               errors={errors}
               onChange={handleChange}
               idPrefix="entry"
-              register={register}
-              cloning={cloning}
+              register={formRegister}
               linked={linked}
               onLinkChange={isAssets ? setLinked : null}
               linkDisabled={saving}
@@ -172,9 +206,19 @@ const DataEntryPage = () => {
             />
             <div className="form-actions">
               <button type="submit" className="btn-primary" disabled={saving}>
-                {saving ? 'Saving…' : `Save ${meta.label.replace(/s$/, '')}`}
+                {saving ? 'Saving…' : `Save ${one}`}
               </button>
-              <button type="button" className="btn-secondary" onClick={resetForm}>
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={saving}
+                onClick={() => submit({ clone: true })}
+                title={`Save this ${registerOf(formRegister).one}, then fill the form in from it for the `
+                  + 'next one of the same batch'}
+              >
+                <Copy size={14} /> Submit &amp; Clone
+              </button>
+              <button type="button" className="btn-secondary" onClick={resetForm} disabled={saving}>
                 Clear Form
               </button>
             </div>
@@ -185,7 +229,11 @@ const DataEntryPage = () => {
       </div>
 
       {poReminder && (
-        <PoReminderDialog label={poLabel} onContinue={save} onCancel={backToPo} />
+        <PoReminderDialog
+          label={poLabel}
+          onContinue={() => save({ clone: poReminder.clone })}
+          onCancel={backToPo}
+        />
       )}
     </div>
   );

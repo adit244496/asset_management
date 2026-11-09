@@ -13,7 +13,7 @@ async function blobError(err, fallback) {
     try {
       const parsed = JSON.parse(await data.text());
       if (parsed?.detail) return String(parsed.detail);
-    } catch {  }
+    } catch { }
   }
   return errorMessage(err, fallback);
 }

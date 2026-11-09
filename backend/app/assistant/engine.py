@@ -3,7 +3,7 @@ import logging
 from datetime import datetime, timezone
 
 from app import roles
-from app.assistant import claude, gemini
+from app.assistant import claude, control, gemini
 from app.assistant import tools as T
 from app.assistant.reply import Reply, ToolCall  # noqa: F401 -- re-exported for providers/tests
 from app.core.config import settings
@@ -34,7 +34,8 @@ class AssistantError(Exception):
 
 
 def provider():
-    return PROVIDERS.get(settings.ASSISTANT_PROVIDER, gemini)
+    """The provider chosen in Admin controls (app/assistant/control.py)."""
+    return PROVIDERS.get(control.current().provider, gemini)
 
 
 def ai_enabled() -> bool:
@@ -44,6 +45,30 @@ def ai_enabled() -> bool:
 
 def model_name() -> str:
     return provider().model()
+
+
+def test_connection(name: str, api_key: str = "", model_id: str = "") -> dict:
+    """Admin controls' Test connection. Tries the key and model given, or the
+    saved ones where they are blank. Never raises; never echoes the key."""
+    p = PROVIDERS.get(name)
+    if p is None:
+        return {"ok": False, "message": "Choose Gemini or Claude."}
+    cfg = control.current()
+    key = api_key or cfg.key_for(name)
+    model_id = model_id or cfg.model_for(name)
+    if not p.available():
+        return {"ok": False, "message": p.explain_test(RuntimeError("missing"), model_id)}
+    stand_in = settings.ASSISTANT_BASE_URL if p is claude else settings.GEMINI_BASE_URL
+    if not key and not stand_in:
+        return {"ok": False, "message": "There is no API key to test -- paste one first."}
+    try:
+        shown = p.test(key, model_id)
+    except Exception as exc:  # noqa: BLE001 -- every failure becomes a readable message
+        logger.warning("Assistant connection test (%s, %s) failed: %s", name, model_id,
+                       exc.__class__.__name__)
+        return {"ok": False, "message": p.explain_test(exc, model_id)}
+    return {"ok": True, "message": f"Connected. {control.PROVIDER_LABELS[name]} accepted the key "
+                                   f"and can use {shown}."}
 
 
 def effective_mode(user, requested: str) -> str:

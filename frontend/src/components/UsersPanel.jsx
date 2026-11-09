@@ -13,6 +13,7 @@ import {
   EMPTY_FILTER, applyFieldFilter, isFiltering, optionsFrom,
 } from '../lib/fieldFilter';
 import { formatDate } from '../lib/dates';
+import { TOPIC, useLiveEvent } from '../lib/live';
 import { userHaystack } from '../lib/userSearch';
 import { ALL_ROLES, canManageAccount } from '../lib/roles';
 import './UsersPanel.css';
@@ -39,19 +40,23 @@ const UsersPanel = () => {
   const [filter, setFilter] = useState(EMPTY_FILTER);
   const [busyId, setBusyId] = useState(null);
 
-  const load = useCallback(async () => {
-    setLoading((prev) => (prev ? prev : true));
+  const load = useCallback(async ({ quiet = false } = {}) => {
+    if (!quiet) setLoading((prev) => (prev ? prev : true));
     try {
       const res = await api.get('/users');
       setUsers(res.data || []);
     } catch (err) {
-      setBanner({ text: errorMessage(err, 'Could not load users.'), kind: 'error' });
+      if (!quiet) setBanner({ text: errorMessage(err, 'Could not load users.'), kind: 'error' });
     } finally {
-      setLoading(false);
+      if (!quiet) setLoading(false);
     }
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Accounts changed elsewhere: refresh the list quietly. An open account
+  // dialog keeps its own copy of the form.
+  useLiveEvent(TOPIC.users, () => { load({ quiet: true }); });
 
   const filterFields = useMemo(() => [
     { key: 'username', label: 'Username', search: true, get: (u) => u.username },

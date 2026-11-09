@@ -9,6 +9,7 @@ try:
 except ImportError:  # pragma: no cover - depends on the environment
     genai = None
 
+from app.assistant import control
 from app.assistant import tools as T
 from app.assistant.prompt import SYSTEM_PROMPT
 from app.assistant.reply import Reply, ToolCall
@@ -16,19 +17,28 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-NAME = "gemini"
+NAME = control.GEMINI
 
 MAX_OUTPUT_TOKENS = 8192
+
+TEST_TIMEOUT_MS = 20_000
 
 _BLOCKED = {"SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII", "RECITATION",
             "IMAGE_SAFETY", "IMAGE_PROHIBITED_CONTENT"}
 
+# One client per (key, address): a key changed in Admin controls gets a fresh
+# client on the next question, without a restart.
 _client = None
+_client_for = None
 _config = None
 
 
 def model() -> str:
-    return settings.GEMINI_MODEL
+    return control.current().gemini_model
+
+
+def _api_key() -> str:
+    return control.current().gemini_key
 
 
 def available() -> bool:
@@ -36,30 +46,60 @@ def available() -> bool:
 
 
 def configured() -> bool:
-    return bool(settings.GEMINI_API_KEY or settings.GEMINI_BASE_URL)
+    return bool(_api_key() or settings.GEMINI_BASE_URL)
 
 
 def errors() -> tuple:
     return (genai_errors.APIError, httpx.HTTPError) if genai is not None else ()
 
 
+def _new_client(api_key: str, timeout_ms: int):
+    options = {"timeout": timeout_ms}
+    if settings.GEMINI_BASE_URL:
+        options["base_url"] = settings.GEMINI_BASE_URL
+    return genai.Client(api_key=api_key or "local-stand-in",
+                        http_options=types.HttpOptions(**options))
+
+
 def client():
-    global _client
-    if _client is None:
-        options = {"timeout": 120_000}
-        if settings.GEMINI_BASE_URL:
-            options["base_url"] = settings.GEMINI_BASE_URL
-        _client = genai.Client(
-            api_key=settings.GEMINI_API_KEY or "local-stand-in",
-            http_options=types.HttpOptions(**options),
-        )
+    global _client, _client_for
+    wanted = (_api_key(), settings.GEMINI_BASE_URL)
+    if _client is None or _client_for != wanted:
+        _client = _new_client(wanted[0], 120_000)
+        _client_for = wanted
     return _client
 
 
 def reset_client():
-    global _client, _config
+    global _client, _client_for, _config
     _client = None
+    _client_for = None
     _config = None
+
+
+def test(api_key: str, model_id: str) -> str:
+    """Check that the key is accepted and can see the model. Looks the model
+    up, so it costs no tokens. Returns the model's display name."""
+    info = _new_client(api_key, TEST_TIMEOUT_MS).models.get(model=model_id)
+    return getattr(info, "display_name", None) or model_id
+
+
+def explain_test(exc: Exception, model_id: str) -> str:
+    if genai is None:
+        return "The google-genai package is not installed on the server (pip install -r requirements.txt)."
+    if isinstance(exc, genai_errors.APIError):
+        code = getattr(exc, "code", 0) or 0
+        message = (getattr(exc, "message", "") or str(exc)).lower()
+        if code in (401, 403) or (code == 400 and "api key" in message):
+            return "Google refused the API key. Check that it was pasted whole and is still active."
+        if code == 404:
+            return f"Gemini has no model called {model_id!r} for this key. Check the model ID."
+        if code == 429:
+            return "The key works, but it has reached its usage limit or is busy. Try again in a minute."
+        return f"Google answered with an error ({code}). Try again shortly."
+    if isinstance(exc, httpx.HTTPError):
+        return "Could not reach Google from the server. Check its internet access and firewall."
+    return "The connection test failed."
 
 
 def config():
@@ -151,7 +191,7 @@ def explain(exc: Exception) -> str:
             return ("The AI assistant is not set up correctly -- its Gemini API key was refused. "
                     "Tell your administrator.")
         if code == 404:
-            return ("The AI assistant is not set up correctly -- the model named in GEMINI_MODEL "
+            return ("The AI assistant is not set up correctly -- the Gemini model set in Admin controls "
                     f"({model()}) is not available to this Gemini API key. Tell your administrator.")
         if code == 429:
             return ("The AI assistant has reached its usage limit or is busy right now. "

@@ -12,6 +12,7 @@ import {
   outcomeLabel, outcomeTone, sourceLabel, subjectOf, toRows,
 } from '../lib/activity';
 import { isStoredDate } from '../lib/dates';
+import { TOPIC, useLiveTick } from '../lib/live';
 import { exportActivityCSV, exportActivityXLSX } from '../lib/exporters';
 import './ActivityLogPage.css';
 
@@ -48,7 +49,9 @@ const ActivityLogPage = () => {
     }
   }, [params]);
 
-  useEffect(() => { load(); }, [load]);
+  const liveTick = useLiveTick(TOPIC.activity);
+
+  useEffect(() => { load(); }, [load, liveTick]);
 
   const setFilter = (key, value) => {
     setLoading(true);

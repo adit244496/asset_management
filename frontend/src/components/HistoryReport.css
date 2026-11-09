@@ -144,12 +144,33 @@
     page-break-inside: avoid;
   }
 
-  .hist-report-table .c-when { width: 15%; white-space: nowrap; }
-  .hist-report-table .c-what { width: 19%; font-weight: 600; }
-  .hist-report-table .c-field { width: 13%; color: #444; }
-  .hist-report-table .c-from { width: 21%; }
-  .hist-report-table .c-to { width: 21%; }
-  .hist-report-table .c-who { width: 11%; color: #444; }
+  .hist-report-table .c-when {
+    width: 15%;
+    white-space: nowrap;
+  }
+
+  .hist-report-table .c-what {
+    width: 19%;
+    font-weight: 600;
+  }
+
+  .hist-report-table .c-field {
+    width: 13%;
+    color: #444;
+  }
+
+  .hist-report-table .c-from {
+    width: 21%;
+  }
+
+  .hist-report-table .c-to {
+    width: 21%;
+  }
+
+  .hist-report-table .c-who {
+    width: 11%;
+    color: #444;
+  }
 
   .hist-report-foot {
     margin-top: 10pt;

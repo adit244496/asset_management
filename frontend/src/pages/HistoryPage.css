@@ -245,6 +245,7 @@
 }
 
 @media (max-width: 1000px) {
+
   .hist-table th:nth-child(5),
   .hist-table td:nth-child(5),
   .hist-table th:nth-child(7),

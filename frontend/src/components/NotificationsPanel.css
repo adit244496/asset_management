@@ -103,10 +103,12 @@
   .notify-inline {
     flex-wrap: wrap;
   }
+
   .notify-inline .field-input {
     flex: 1 1 100%;
     min-width: 0;
   }
+
   .notify-inline .btn-secondary {
     flex: 1 1 100%;
     white-space: normal;
@@ -148,42 +150,56 @@
   font-size: 12px;
   font-weight: 600;
 }
+
 .notify-renewals {
   margin-top: 10px;
   max-width: 900px;
 }
+
 .notify-renewals-head {
   margin-bottom: 6px;
   font-size: 12px;
   font-weight: 700;
 }
+
 .notify-renewals-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 12px;
 }
+
 .notify-renewals-table td {
   padding: 4px 8px;
   border-top: 1px solid var(--border);
 }
+
 .notify-renewals-id {
   font-family: var(--font-mono, ui-monospace, monospace);
   white-space: nowrap;
 }
+
 .notify-renewals-when {
   white-space: nowrap;
   font-weight: 600;
 }
-.notify-renewals-table tr.is-soon .notify-renewals-when { color: var(--warning); }
-.notify-renewals-table tr.is-overdue .notify-renewals-when { color: var(--critical); }
+
+.notify-renewals-table tr.is-soon .notify-renewals-when {
+  color: var(--warning);
+}
+
+.notify-renewals-table tr.is-overdue .notify-renewals-when {
+  color: var(--critical);
+}
 
 /* Phones: each licence becomes a three-line card -- ID and how long to go, the name, then the date
    and which reminder it is on -- instead of five squeezed columns. */
 @media (max-width: 640px) {
+
   .notify-renewals-table,
   .notify-renewals-table tbody {
     display: block;
   }
+
   .notify-renewals-table tr {
     display: grid;
     grid-template-columns: auto 1fr auto;
@@ -195,19 +211,52 @@
     padding: 10px 2px;
     border-top: 1px solid var(--border);
   }
+
   .notify-renewals-table td {
     padding: 0;
     border-top: none;
     min-width: 0;
   }
-  .notify-renewals-id { grid-area: id; font-size: 11px; color: var(--text-secondary); align-self: center; }
-  .notify-renewals-when { grid-area: when; text-align: right; }
-  .notify-renewals-name { grid-area: name; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+
+  .notify-renewals-id {
+    grid-area: id;
+    font-size: 11px;
+    color: var(--text-secondary);
+    align-self: center;
+  }
+
+  .notify-renewals-when {
+    grid-area: when;
+    text-align: right;
+  }
+
+  .notify-renewals-name {
+    grid-area: name;
+    font-size: 13px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+
   .notify-renewals-date,
-  .notify-renewals-stage { font-size: 12px; line-height: 1.4; align-self: baseline; }
-  .notify-renewals-date { grid-area: date; white-space: nowrap; color: var(--text-secondary); }
-  .notify-renewals-stage { grid-area: stage; }
-  .notify-renewals-stage::before { content: '· '; }
+  .notify-renewals-stage {
+    font-size: 12px;
+    line-height: 1.4;
+    align-self: baseline;
+  }
+
+  .notify-renewals-date {
+    grid-area: date;
+    white-space: nowrap;
+    color: var(--text-secondary);
+  }
+
+  .notify-renewals-stage {
+    grid-area: stage;
+  }
+
+  .notify-renewals-stage::before {
+    content: '· ';
+  }
 }
 
 .notify-span2 {
@@ -215,7 +264,9 @@
 }
 
 @media (max-width: 720px) {
-  .notify-span2 { grid-column: 1 / -1; }
+  .notify-span2 {
+    grid-column: 1 / -1;
+  }
 }
 
 .notify-chips {
@@ -392,10 +443,21 @@
   color: var(--text-secondary);
 }
 
-.notify-status.s-pending { background: var(--warning-soft); color: var(--warning); }
-.notify-status.s-approved { background: var(--good-soft); color: var(--good); }
+.notify-status.s-pending {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.notify-status.s-approved {
+  background: var(--good-soft);
+  color: var(--good);
+}
+
 .notify-status.s-rejected,
-.notify-status.s-failed { background: var(--critical-soft); color: var(--critical); }
+.notify-status.s-failed {
+  background: var(--critical-soft);
+  color: var(--critical);
+}
 
 .notify-export-status {
   margin: 10px 0 12px;

@@ -103,8 +103,8 @@ const BulkUpload = () => {
       const skippedNote = result.skipped ? `, skipped ${result.skipped}` : '';
       const accountNote = result.accounts
         ? ` Created ${result.accounts.created.length} user record(s).`
-          + (result.accounts.joiningDatesFilled
-            ? ` Added a joining date to ${result.accounts.joiningDatesFilled} existing one(s).` : '')
+        + (result.accounts.joiningDatesFilled
+          ? ` Added a joining date to ${result.accounts.joiningDatesFilled} existing one(s).` : '')
         : '';
       const added = Object.values(result.unknownMasters || {})
         .reduce((n, values) => n + values.length, 0);
@@ -122,17 +122,17 @@ const BulkUpload = () => {
       const waiting = result.added - bySap;
       const where = result.awaitingVerification
         ? `${skippedNote}.`
-          + (bySap
-            ? ` ${bySap} ${bySap === 1 ? 'has' : 'have'} a SAP ID, so went straight into the `
-              + `${meta.one} register without verification. The other ${waiting} `
-              + `${waiting === 1 ? 'is' : 'are'} waiting in Verification`
-            : ' They are waiting in Verification')
-          + ` and join the ${meta.one} register once another verifier has checked them.`
+        + (bySap
+          ? ` ${bySap} ${bySap === 1 ? 'has' : 'have'} a SAP ID, so went straight into the `
+          + `${meta.one} register without verification. The other ${waiting} `
+          + `${waiting === 1 ? 'is' : 'are'} waiting in Verification`
+          : ' They are waiting in Verification')
+        + ` and join the ${meta.one} register once another verifier has checked them.`
         : `${skippedNote} into the ${meta.one} register.`
-          + (bySap
-            ? ` ${bySap === result.added ? (bySap === 1 ? 'It has' : 'They have') : `${bySap} ${bySap === 1 ? 'has' : 'have'}`}`
-              + ' a SAP ID, so skipped Verification.'
-            : '');
+        + (bySap
+          ? ` ${bySap === result.added ? (bySap === 1 ? 'It has' : 'They have') : `${bySap} ${bySap === 1 ? 'has' : 'have'}`}`
+          + ' a SAP ID, so skipped Verification.'
+          : '');
       setStatus({
         text: `Imported ${result.added} record(s)${where}`
           + `${accountNote}${masterNote}${spellingNote}`,
@@ -392,7 +392,7 @@ const BulkUpload = () => {
                 <option key={c.value} value={c.value}>
                   {register === SOFTWARE && ['srl', 'poNo', 'assetTag'].includes(c.value)
                     ? `Match on ${byKeyFor(c.value, register).label} only`
-                      + (c.value === 'assetTag' ? ' — not unique, can drop licences' : '')
+                    + (c.value === 'assetTag' ? ' — not unique, can drop licences' : '')
                     : c.label}
                 </option>
               ))}

@@ -191,6 +191,7 @@
 }
 
 @media (max-width: 1400px) {
+
   .top-nav-divider,
   .top-section-title {
     display: none;
@@ -242,8 +243,8 @@
   pointer-events: none;
   z-index: 1;
   transition: transform 0.24s cubic-bezier(0.16, 1, 0.3, 1),
-              width 0.22s cubic-bezier(0.16, 1, 0.3, 1),
-              opacity 0.18s ease;
+    width 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.18s ease;
   will-change: transform, width;
 }
 
@@ -269,8 +270,8 @@
   display: inline-block;
   transform-origin: center center;
   transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
-              color 0.15s ease,
-              text-shadow 0.2s ease;
+    color 0.15s ease,
+    text-shadow 0.2s ease;
   will-change: transform;
 }
 
@@ -371,6 +372,7 @@
 }
 
 @media (max-width: 680px) {
+
   .top-brand-by,
   .top-brand-corp {
     display: none;
@@ -468,6 +470,7 @@
     transform: scale(0.7);
     box-shadow: 0 0 10px #ffc72c;
   }
+
   100% {
     opacity: 0;
     transform: scale(2.5);
@@ -530,6 +533,7 @@
     opacity: 0;
     transform: translateY(-6px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -715,16 +719,20 @@
     left: 0%;
     opacity: 0;
   }
+
   2.5% {
     opacity: 1;
   }
+
   90% {
     opacity: 1;
   }
+
   95% {
     left: 100%;
     opacity: 0;
   }
+
   100% {
     left: 100%;
     opacity: 0;
@@ -732,6 +740,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .top-brand .star-tracer-group,
   .top-nav-border-tracer {
     display: none !important;
@@ -958,9 +967,21 @@
 }
 
 @keyframes nav-drawer-star-fall {
-  0% { top: -6%; opacity: 0; transform: rotate(0deg) scale(1); }
-  8% { opacity: 1; }
-  100% { top: 100%; opacity: 0; transform: rotate(160deg) scale(0.55); }
+  0% {
+    top: -6%;
+    opacity: 0;
+    transform: rotate(0deg) scale(1);
+  }
+
+  8% {
+    opacity: 1;
+  }
+
+  100% {
+    top: 100%;
+    opacity: 0;
+    transform: rotate(160deg) scale(0.55);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -970,21 +991,33 @@
 }
 
 @keyframes nav-drawer-slide {
-  from { transform: translateX(-100%); }
-  to { transform: translateX(0); }
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(0);
+  }
 }
 
 @keyframes nav-drawer-fade {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .nav-drawer,
   .nav-drawer-overlay {
     animation: none;
   }
 }
+
 .top-nav.is-compact {
   display: flex;
   justify-content: space-between;
@@ -1001,6 +1034,7 @@
 .top-nav.is-compact .top-menu-btn {
   display: inline-flex;
 }
+
 /* Phones: "IT Asset Engine" and the AmbujaNeotia logo take turns in the same spot, 5 s each. */
 .top-brand-swap {
   display: contents;
@@ -1021,8 +1055,8 @@
     justify-items: start;
   }
 
-  .top-brand-swap > .top-brand-text,
-  .top-brand-swap > .top-brand-swap-logo {
+  .top-brand-swap>.top-brand-text,
+  .top-brand-swap>.top-brand-swap-logo {
     grid-area: 1 / 1;
     transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out, filter 0.5s ease-in-out;
     will-change: opacity, transform;
@@ -1044,13 +1078,13 @@
     visibility: hidden;
   }
 
-  .top-brand-swap.show-logo > .top-brand-text {
+  .top-brand-swap.show-logo>.top-brand-text {
     opacity: 0;
     transform: translateY(-6px);
     filter: blur(2px);
   }
 
-  .top-brand-swap.show-logo > .top-brand-swap-logo {
+  .top-brand-swap.show-logo>.top-brand-swap-logo {
     opacity: 1;
     transform: translateY(0);
     filter: blur(0);
@@ -1085,8 +1119,9 @@
 }
 
 @media (max-width: 680px) and (prefers-reduced-motion: reduce) {
-  .top-brand-swap > .top-brand-text,
-  .top-brand-swap > .top-brand-swap-logo {
+
+  .top-brand-swap>.top-brand-text,
+  .top-brand-swap>.top-brand-swap-logo {
     transition: none;
   }
 }

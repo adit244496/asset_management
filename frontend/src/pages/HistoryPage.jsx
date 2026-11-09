@@ -13,6 +13,7 @@ import { useAssets } from '../context/AssetsContext';
 import { getDatePresets } from '../lib/datePresets';
 import { formatDateTime, isStoredDate } from '../lib/dates';
 import { RETIRED_LABELS } from '../lib/historyGroups';
+import { topicOfRegister, useLiveTick } from '../lib/live';
 import { useLongPress } from '../lib/longPress';
 import { SOFTWARE, labelFor, pathOf } from '../lib/registers';
 import { byKey, byKeyFor } from '../lib/schema';
@@ -145,9 +146,16 @@ const HistoryPage = () => {
     minChanges: minChanges > 1 ? minChanges : undefined,
   }), [query, searchIn, picks, from, to, minChanges]);
 
+  const liveTick = useLiveTick(topicOfRegister(register));
+  const seenTick = useRef(liveTick);
+
   useEffect(() => {
     const ticket = ++requestRef.current;
-    setLoading(true);
+    // A re-fetch because someone else changed something is quiet: the list
+    // stays on screen until the fresh one arrives.
+    const quiet = seenTick.current !== liveTick;
+    seenTick.current = liveTick;
+    if (!quiet) setLoading(true);
     registerHistory({
       ...filterParams,
       limit: PAGE_SIZE,
@@ -156,16 +164,16 @@ const HistoryPage = () => {
       .then((res) => {
         if (ticket !== requestRef.current) return;
         setData(res);
-        setBanner(null);
+        if (!quiet) setBanner(null);
       })
       .catch((err) => {
-        if (ticket !== requestRef.current) return;
+        if (ticket !== requestRef.current || quiet) return;
         setBanner({ text: errorMessage(err, 'Could not load the history.'), kind: 'error' });
       })
       .finally(() => {
         if (ticket === requestRef.current) setLoading(false);
       });
-  }, [registerHistory, filterParams, page]);
+  }, [registerHistory, filterParams, page, liveTick]);
 
   const items = data?.items || [];
   const total = data?.total || 0;
@@ -222,7 +230,7 @@ const HistoryPage = () => {
         try {
           const body = JSON.parse(await err.response.data.text());
           text = [].concat(body.detail || text).join(' ');
-        } catch {  }
+        } catch { }
       }
       setBanner({ text, kind: 'error' });
     } finally {
@@ -280,376 +288,376 @@ const HistoryPage = () => {
           <RegisterToggle size="sm" />
         </div>
 
-      <Banner banner={banner} onDismiss={() => setBanner(null)} />
+        <Banner banner={banner} onDismiss={() => setBanner(null)} />
 
-      <div className="report-filter-row hist-filter-row" ref={barRef}>
-        {field?.date ? (
-          <div className="report-date-range-wrap report-search-wrap">
-            <Calendar size={14} className="report-search-icon" />
-            <span className="report-date-label">From</span>
-            <DateInput className="report-date-range-input" value={from}
-              aria-label="Changed on or after"
-              onChange={(v) => { if (v === '' || isStoredDate(v)) setRange(v, to); }} />
-            <span className="report-date-label">To</span>
-            <DateInput className="report-date-range-input" value={to}
-              aria-label="Changed on or before"
-              onChange={(v) => { if (v === '' || isStoredDate(v)) setRange(from, v); }} />
-            {(from || to) && (
-              <button type="button" className="report-search-clear" onClick={() => setRange('', '')}
-                title="Clear date range" aria-label="Clear date range">
-                <X size={13} />
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="report-search-wrap">
-            <Search size={14} className="report-search-icon" />
-            <input
-              type="text"
-              className="report-search-input"
-              placeholder={searchIn ? `Search ${field.label}…` : `Search a ${meta.one}, a value, a person…`}
-              aria-label={searchIn ? `Search ${field.label}` : 'Search the history'}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            {search && (
-              <button type="button" className="report-search-clear" onClick={() => setSearch('')}
-                aria-label="Clear search">
-                <X size={13} />
-              </button>
-            )}
-          </div>
-        )}
-
-        <div className="filter-pill-wrap">
-          <button
-            type="button"
-            className={`filter-pill${field ? ' active' : ''}`}
-            onClick={() => setMenu(menu === 'field' ? null : 'field')}
-            aria-haspopup="listbox"
-            aria-expanded={menu === 'field'}
-            title="Choose which field to filter on"
-          >
-            <Layers size={13} />
-            <span>{field ? `Filter: ${field.label}` : 'Filter'}</span>
-            <ChevronDown size={12} className="pill-caret" />
-          </button>
-          {menu === 'field' && (
-            <div className="filter-pill-popover" role="listbox" aria-label="Filter on">
-              <div className="pill-popover-header">Search in</div>
-              <div className="pill-popover-list">
-                <button type="button" role="option" aria-selected={!field}
-                  className={`pill-popover-option${!field ? ' selected' : ''}`}
-                  onClick={() => chooseField('')}>
-                  All fields
+        <div className="report-filter-row hist-filter-row" ref={barRef}>
+          {field?.date ? (
+            <div className="report-date-range-wrap report-search-wrap">
+              <Calendar size={14} className="report-search-icon" />
+              <span className="report-date-label">From</span>
+              <DateInput className="report-date-range-input" value={from}
+                aria-label="Changed on or after"
+                onChange={(v) => { if (v === '' || isStoredDate(v)) setRange(v, to); }} />
+              <span className="report-date-label">To</span>
+              <DateInput className="report-date-range-input" value={to}
+                aria-label="Changed on or before"
+                onChange={(v) => { if (v === '' || isStoredDate(v)) setRange(from, v); }} />
+              {(from || to) && (
+                <button type="button" className="report-search-clear" onClick={() => setRange('', '')}
+                  title="Clear date range" aria-label="Clear date range">
+                  <X size={13} />
                 </button>
-                {fields.map((f) => (
-                  <button key={f.key} type="button" role="option" aria-selected={fieldKey === f.key}
-                    className={`pill-popover-option${fieldKey === f.key ? ' selected' : ''}`}
-                    onClick={() => chooseField(f.key)}>
-                    {f.label}
-                  </button>
-                ))}
-              </div>
+              )}
+            </div>
+          ) : (
+            <div className="report-search-wrap">
+              <Search size={14} className="report-search-icon" />
+              <input
+                type="text"
+                className="report-search-input"
+                placeholder={searchIn ? `Search ${field.label}…` : `Search a ${meta.one}, a value, a person…`}
+                aria-label={searchIn ? `Search ${field.label}` : 'Search the history'}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              {search && (
+                <button type="button" className="report-search-clear" onClick={() => setSearch('')}
+                  aria-label="Clear search">
+                  <X size={13} />
+                </button>
+              )}
             </div>
           )}
-        </div>
 
-        {field?.values && (
           <div className="filter-pill-wrap">
             <button
               type="button"
-              className={`filter-pill${fieldPicks.length ? ' active' : ''}`}
-              onClick={() => setMenu(menu === 'values' ? null : 'values')}
+              className={`filter-pill${field ? ' active' : ''}`}
+              onClick={() => setMenu(menu === 'field' ? null : 'field')}
               aria-haspopup="listbox"
-              aria-expanded={menu === 'values'}
-              title={`Show only these ${field.label} values`}
+              aria-expanded={menu === 'field'}
+              title="Choose which field to filter on"
             >
-              <span>
-                {fieldPicks.length === 1
-                  ? pickLabel(field.key, fieldPicks[0])
-                  : fieldPicks.length
-                    ? `${field.label} (${fieldPicks.length})`
-                    : `Any ${field.label}`}
-              </span>
+              <Layers size={13} />
+              <span>{field ? `Filter: ${field.label}` : 'Filter'}</span>
               <ChevronDown size={12} className="pill-caret" />
             </button>
-            {menu === 'values' && (
-              <div className="filter-pill-popover">
-                <div className="pill-popover-header">{field.label}</div>
+            {menu === 'field' && (
+              <div className="filter-pill-popover" role="listbox" aria-label="Filter on">
+                <div className="pill-popover-header">Search in</div>
                 <div className="pill-popover-list">
-                  {valuesFor(field.key).length === 0 && (
-                    <div className="pill-popover-empty">Nothing to choose from yet.</div>
-                  )}
-                  {valuesFor(field.key).map(({ value, label }) => (
-                    <label key={value} className="pill-popover-item">
-                      <input type="checkbox" checked={fieldPicks.includes(value)}
-                        onChange={() => togglePick(field.key, value)} />
-                      <span>{label}</span>
-                    </label>
-                  ))}
-                </div>
-                {fieldPicks.length > 0 && (
-                  <button type="button" className="pill-popover-clear"
-                    onClick={() => { setPicks((p) => ({ ...p, [field.key]: [] })); setPage(1); }}>
-                    Clear {field.label.toLowerCase()} filter
+                  <button type="button" role="option" aria-selected={!field}
+                    className={`pill-popover-option${!field ? ' selected' : ''}`}
+                    onClick={() => chooseField('')}>
+                    All fields
                   </button>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {field?.date && (
-          <div className="filter-pill-wrap">
-            <button
-              type="button"
-              className={`filter-pill${from || to ? ' active' : ''}`}
-              onClick={() => setMenu(menu === 'range' ? null : 'range')}
-              aria-haspopup="dialog"
-              aria-expanded={menu === 'range'}
-              title="Quick ranges for when the change was made"
-            >
-              <Calendar size={13} />
-              <span>Quick Range</span>
-              <ChevronDown size={12} className="pill-caret" />
-            </button>
-            {menu === 'range' && (
-              <div className="filter-pill-popover date-range-popover">
-                <div className="pill-popover-header">When it changed</div>
-                <div className="date-range-presets-list">
-                  {datePresets.map((preset) => (
-                    <button key={preset.label} type="button" className="date-range-preset-item"
-                      onClick={() => { setRange(preset.from, preset.to); setMenu(null); }}>
-                      <span className="preset-label">{preset.label}</span>
-                      <span className="preset-dates">{preset.from} → {preset.to}</span>
+                  {fields.map((f) => (
+                    <button key={f.key} type="button" role="option" aria-selected={fieldKey === f.key}
+                      className={`pill-popover-option${fieldKey === f.key ? ' selected' : ''}`}
+                      onClick={() => chooseField(f.key)}>
+                      {f.label}
                     </button>
                   ))}
                 </div>
               </div>
             )}
           </div>
-        )}
 
-        <div className="filter-pill-wrap">
+          {field?.values && (
+            <div className="filter-pill-wrap">
+              <button
+                type="button"
+                className={`filter-pill${fieldPicks.length ? ' active' : ''}`}
+                onClick={() => setMenu(menu === 'values' ? null : 'values')}
+                aria-haspopup="listbox"
+                aria-expanded={menu === 'values'}
+                title={`Show only these ${field.label} values`}
+              >
+                <span>
+                  {fieldPicks.length === 1
+                    ? pickLabel(field.key, fieldPicks[0])
+                    : fieldPicks.length
+                      ? `${field.label} (${fieldPicks.length})`
+                      : `Any ${field.label}`}
+                </span>
+                <ChevronDown size={12} className="pill-caret" />
+              </button>
+              {menu === 'values' && (
+                <div className="filter-pill-popover">
+                  <div className="pill-popover-header">{field.label}</div>
+                  <div className="pill-popover-list">
+                    {valuesFor(field.key).length === 0 && (
+                      <div className="pill-popover-empty">Nothing to choose from yet.</div>
+                    )}
+                    {valuesFor(field.key).map(({ value, label }) => (
+                      <label key={value} className="pill-popover-item">
+                        <input type="checkbox" checked={fieldPicks.includes(value)}
+                          onChange={() => togglePick(field.key, value)} />
+                        <span>{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {fieldPicks.length > 0 && (
+                    <button type="button" className="pill-popover-clear"
+                      onClick={() => { setPicks((p) => ({ ...p, [field.key]: [] })); setPage(1); }}>
+                      Clear {field.label.toLowerCase()} filter
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {field?.date && (
+            <div className="filter-pill-wrap">
+              <button
+                type="button"
+                className={`filter-pill${from || to ? ' active' : ''}`}
+                onClick={() => setMenu(menu === 'range' ? null : 'range')}
+                aria-haspopup="dialog"
+                aria-expanded={menu === 'range'}
+                title="Quick ranges for when the change was made"
+              >
+                <Calendar size={13} />
+                <span>Quick Range</span>
+                <ChevronDown size={12} className="pill-caret" />
+              </button>
+              {menu === 'range' && (
+                <div className="filter-pill-popover date-range-popover">
+                  <div className="pill-popover-header">When it changed</div>
+                  <div className="date-range-presets-list">
+                    {datePresets.map((preset) => (
+                      <button key={preset.label} type="button" className="date-range-preset-item"
+                        onClick={() => { setRange(preset.from, preset.to); setMenu(null); }}>
+                        <span className="preset-label">{preset.label}</span>
+                        <span className="preset-dates">{preset.from} → {preset.to}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="filter-pill-wrap">
+            <button
+              type="button"
+              className={`filter-pill${minChanges > 1 ? ' active' : ''}`}
+              onClick={() => setMenu(menu === 'changes' ? null : 'changes')}
+              aria-haspopup="listbox"
+              aria-expanded={menu === 'changes'}
+              title="Show only records changed at least this many times"
+            >
+              <ListOrdered size={13} />
+              <span>{minChanges > 1 ? `${minChanges}+ changes` : 'Changes'}</span>
+              <ChevronDown size={12} className="pill-caret" />
+            </button>
+            {menu === 'changes' && (
+              <div className="filter-pill-popover hist-changes-popover">
+                <div className="pill-popover-header">Changed at least</div>
+                <div className="pill-popover-list">
+                  <button type="button" className={`pill-popover-option${minChanges <= 1 ? ' selected' : ''}`}
+                    onClick={() => { chooseMinChanges(0); setMenu(null); }}>
+                    Any number of times
+                  </button>
+                  {CHANGE_PRESETS.map((n) => (
+                    <button key={n} type="button"
+                      className={`pill-popover-option${minChanges === n ? ' selected' : ''}`}
+                      onClick={() => { chooseMinChanges(n); setMenu(null); }}>
+                      {n} or more times
+                    </button>
+                  ))}
+                </div>
+                <label className="hist-changes-custom">
+                  <span>Or type a number</span>
+                  <input
+                    type="number"
+                    min="2"
+                    step="1"
+                    className="field-input"
+                    value={minChanges > 1 ? minChanges : ''}
+                    placeholder="e.g. 4"
+                    onChange={(e) => chooseMinChanges(parseInt(e.target.value, 10))}
+                  />
+                </label>
+              </div>
+            )}
+          </div>
+
+          {filtered && (
+            <button type="button" className="btn-clear-pill" onClick={clearFilters}
+              title="Clear the search and every filter">
+              <X size={12} /> Reset
+            </button>
+          )}
+
           <button
             type="button"
-            className={`filter-pill${minChanges > 1 ? ' active' : ''}`}
-            onClick={() => setMenu(menu === 'changes' ? null : 'changes')}
-            aria-haspopup="listbox"
-            aria-expanded={menu === 'changes'}
-            title="Show only records changed at least this many times"
+            className={`${selected.size ? 'btn-primary' : 'btn-secondary'} hist-download-btn`}
+            onClick={downloadReport}
+            disabled={downloading || (!selected.size && !loading && total === 0)}
+            title={selected.size
+              ? `Download the movement history of the ${selected.size} ticked — every change, when and by whom`
+              : `Download the movement history of every ${meta.one} shown here (all pages) — every change, when and by whom`}
           >
-            <ListOrdered size={13} />
-            <span>{minChanges > 1 ? `${minChanges}+ changes` : 'Changes'}</span>
-            <ChevronDown size={12} className="pill-caret" />
+            <Download size={14} />
+            {downloading ? 'Preparing…'
+              : selected.size ? `Download ${selected.size.toLocaleString('en-IN')} selected` : 'Download report'}
           </button>
-          {menu === 'changes' && (
-            <div className="filter-pill-popover hist-changes-popover">
-              <div className="pill-popover-header">Changed at least</div>
-              <div className="pill-popover-list">
-                <button type="button" className={`pill-popover-option${minChanges <= 1 ? ' selected' : ''}`}
-                  onClick={() => { chooseMinChanges(0); setMenu(null); }}>
-                  Any number of times
+        </div>
+
+        {(picked || from || to || minChanges > 1) && (
+          <div className="hist-chips">
+            {Object.entries(picks).filter(([, list]) => list.length).map(([key, list]) => (
+              <span key={key} className="hist-filter-chip">
+                <span className="hist-filter-chip-key">{labelOf(key)}:</span>
+                {list.map((v) => pickLabel(key, v)).join(', ')}
+                <button type="button" aria-label={`Remove the ${labelOf(key)} filter`}
+                  onClick={() => { setPicks((p) => ({ ...p, [key]: [] })); setPage(1); }}>
+                  <X size={11} />
                 </button>
-                {CHANGE_PRESETS.map((n) => (
-                  <button key={n} type="button"
-                    className={`pill-popover-option${minChanges === n ? ' selected' : ''}`}
-                    onClick={() => { chooseMinChanges(n); setMenu(null); }}>
-                    {n} or more times
-                  </button>
-                ))}
-              </div>
-              <label className="hist-changes-custom">
-                <span>Or type a number</span>
-                <input
-                  type="number"
-                  min="2"
-                  step="1"
-                  className="field-input"
-                  value={minChanges > 1 ? minChanges : ''}
-                  placeholder="e.g. 4"
-                  onChange={(e) => chooseMinChanges(parseInt(e.target.value, 10))}
-                />
-              </label>
+              </span>
+            ))}
+            {(from || to) && (
+              <span className="hist-filter-chip">
+                <span className="hist-filter-chip-key">When:</span>
+                {from && to ? `${from} → ${to}` : from ? `from ${from}` : `until ${to}`}
+                <button type="button" aria-label="Remove the date filter" onClick={() => setRange('', '')}>
+                  <X size={11} />
+                </button>
+              </span>
+            )}
+            {minChanges > 1 && (
+              <span className="hist-filter-chip">
+                <span className="hist-filter-chip-key">Changes:</span>
+                {minChanges} or more
+                <button type="button" aria-label="Remove the changes filter" onClick={() => chooseMinChanges(0)}>
+                  <X size={11} />
+                </button>
+              </span>
+            )}
+          </div>
+        )}
+
+        <div className="hist-count">
+          {loading && !data
+            ? 'Loading…'
+            : `${total.toLocaleString('en-IN')} ${total === 1 ? meta.one : meta.many}${filtered ? ' matching' : ' with recorded changes'}`}
+          {selected.size > 0 && (
+            <>
+              {' · '}<strong>{selected.size.toLocaleString('en-IN')} selected</strong>{' '}
+              <button type="button" className="hist-clear-selection" onClick={() => setSelected(new Set())}>
+                Clear selection
+              </button>
+            </>
+          )}
+        </div>
+
+        <div className={`data-table-wrap hist-table-wrap${loading ? ' is-loading' : ''}`}>
+          <table className="data-table hist-table">
+            <thead>
+              <tr>
+                <th className="hist-col-pick">
+                  <input
+                    type="checkbox"
+                    checked={pagePicked}
+                    disabled={!pageIds.length}
+                    onChange={togglePage}
+                    aria-label={pagePicked ? 'Untick every row on this page' : 'Tick every row on this page'}
+                    title={pagePicked ? 'Untick this page' : 'Tick every row on this page'}
+                  />
+                </th>
+                <th className="hist-col-id">{labelFor('assetId', 'Asset ID', register)}</th>
+                {!isSoftware && <th>{typeLabel}</th>}
+                <th>{isSoftware ? labelFor('assetTag', 'Asset Name', register) : 'Asset Name'}</th>
+                {!isSoftware && <th>Model</th>}
+                <th>Status</th>
+                <th className="num-cell">Changes</th>
+                <th>Latest change</th>
+                <th>When</th>
+                <th>By</th>
+                <th aria-label="Open" />
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((row) => {
+                const Icon = ICONS[row.lastAction] || Pencil;
+                return (
+                  <tr
+                    key={row.assetPk}
+                    {...longPress(row.assetPk, () => toggleRow(row.assetPk))}
+                    className={`hist-tr longpress-row${row.isDeleted ? ' row-deleted' : ''}${selected.has(row.assetPk) ? ' row-selected' : ''}${pressing === row.assetPk ? ' row-pressing' : ''}${flash === row.assetPk && selected.has(row.assetPk) ? ' row-flash' : ''}`}
+                    onClick={() => open(row)}
+                    tabIndex={0}
+                    role="link"
+                    onKeyDown={(e) => {
+                      if (e.target !== e.currentTarget) return;
+                      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(row); }
+                    }}
+                  >
+                    <td className="hist-col-pick" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selected.has(row.assetPk)}
+                        onChange={() => toggleRow(row.assetPk)}
+                        aria-label={`Select ${row.assetId || 'this record'}`}
+                      />
+                    </td>
+                    <td className="hist-col-id">
+                      <span className="hist-asset-id">{row.assetId || '—'}</span>
+                      {row.recordedAssetId && row.recordedAssetId !== row.assetId && (
+                        <span className="hist-asset-was">was {row.recordedAssetId}</span>
+                      )}
+                    </td>
+                    {!isSoftware && <td className="hist-muted hist-nowrap">{row.type || '—'}</td>}
+                    <td>{row.assetTag || <span className="hist-gone">no longer in the register</span>}</td>
+                    {!isSoftware && <td className="hist-muted">{row.model || '—'}</td>}
+                    <td>{row.status ? <StatusBadge status={row.status} /> : '—'}</td>
+                    <td className="num-cell">{row.changes.toLocaleString('en-IN')}</td>
+                    <td>
+                      <span className={`hist-chip hist-chip-${row.lastAction}`}>
+                        <Icon size={11} /> {summarise(row, register)}
+                      </span>
+                    </td>
+                    <td className="hist-muted hist-nowrap">{formatWhen(row.lastAt)}</td>
+                    <td className="hist-muted">{row.lastActor || '—'}</td>
+                    <td className="hist-open"><ChevronRight size={15} /></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          {!loading && !items.length && (
+            <div className="hist-empty-state">
+              {filtered ? (
+                <>Nothing matches these filters.</>
+              ) : (
+                <>
+                  Nothing recorded yet. History starts from the first change after this
+                  was added, so a register that has not been touched since shows nothing
+                  here.
+                </>
+              )}
             </div>
           )}
         </div>
 
-        {filtered && (
-          <button type="button" className="btn-clear-pill" onClick={clearFilters}
-            title="Clear the search and every filter">
-            <X size={12} /> Reset
-          </button>
-        )}
-
-        <button
-          type="button"
-          className={`${selected.size ? 'btn-primary' : 'btn-secondary'} hist-download-btn`}
-          onClick={downloadReport}
-          disabled={downloading || (!selected.size && !loading && total === 0)}
-          title={selected.size
-            ? `Download the movement history of the ${selected.size} ticked — every change, when and by whom`
-            : `Download the movement history of every ${meta.one} shown here (all pages) — every change, when and by whom`}
-        >
-          <Download size={14} />
-          {downloading ? 'Preparing…'
-            : selected.size ? `Download ${selected.size.toLocaleString('en-IN')} selected` : 'Download report'}
-        </button>
-      </div>
-
-      {(picked || from || to || minChanges > 1) && (
-        <div className="hist-chips">
-          {Object.entries(picks).filter(([, list]) => list.length).map(([key, list]) => (
-            <span key={key} className="hist-filter-chip">
-              <span className="hist-filter-chip-key">{labelOf(key)}:</span>
-              {list.map((v) => pickLabel(key, v)).join(', ')}
-              <button type="button" aria-label={`Remove the ${labelOf(key)} filter`}
-                onClick={() => { setPicks((p) => ({ ...p, [key]: [] })); setPage(1); }}>
-                <X size={11} />
-              </button>
-            </span>
-          ))}
-          {(from || to) && (
-            <span className="hist-filter-chip">
-              <span className="hist-filter-chip-key">When:</span>
-              {from && to ? `${from} → ${to}` : from ? `from ${from}` : `until ${to}`}
-              <button type="button" aria-label="Remove the date filter" onClick={() => setRange('', '')}>
-                <X size={11} />
-              </button>
-            </span>
-          )}
-          {minChanges > 1 && (
-            <span className="hist-filter-chip">
-              <span className="hist-filter-chip-key">Changes:</span>
-              {minChanges} or more
-              <button type="button" aria-label="Remove the changes filter" onClick={() => chooseMinChanges(0)}>
-                <X size={11} />
-              </button>
-            </span>
-          )}
-        </div>
-      )}
-
-      <div className="hist-count">
-        {loading && !data
-          ? 'Loading…'
-          : `${total.toLocaleString('en-IN')} ${total === 1 ? meta.one : meta.many}${filtered ? ' matching' : ' with recorded changes'}`}
-        {selected.size > 0 && (
-          <>
-            {' · '}<strong>{selected.size.toLocaleString('en-IN')} selected</strong>{' '}
-            <button type="button" className="hist-clear-selection" onClick={() => setSelected(new Set())}>
-              Clear selection
+        {totalPages > 1 && (
+          <div className="hist-pagination">
+            <button type="button" onClick={() => setPage(1)} disabled={page <= 1}>First</button>
+            <button type="button" onClick={() => setPage((p) => p - 1)} disabled={page <= 1}>
+              Previous
             </button>
-          </>
-        )}
-      </div>
-
-      <div className={`data-table-wrap hist-table-wrap${loading ? ' is-loading' : ''}`}>
-        <table className="data-table hist-table">
-          <thead>
-            <tr>
-              <th className="hist-col-pick">
-                <input
-                  type="checkbox"
-                  checked={pagePicked}
-                  disabled={!pageIds.length}
-                  onChange={togglePage}
-                  aria-label={pagePicked ? 'Untick every row on this page' : 'Tick every row on this page'}
-                  title={pagePicked ? 'Untick this page' : 'Tick every row on this page'}
-                />
-              </th>
-              <th className="hist-col-id">{labelFor('assetId', 'Asset ID', register)}</th>
-              {!isSoftware && <th>{typeLabel}</th>}
-              <th>{isSoftware ? labelFor('assetTag', 'Asset Name', register) : 'Asset Name'}</th>
-              {!isSoftware && <th>Model</th>}
-              <th>Status</th>
-              <th className="num-cell">Changes</th>
-              <th>Latest change</th>
-              <th>When</th>
-              <th>By</th>
-              <th aria-label="Open" />
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((row) => {
-              const Icon = ICONS[row.lastAction] || Pencil;
-              return (
-                <tr
-                  key={row.assetPk}
-                  {...longPress(row.assetPk, () => toggleRow(row.assetPk))}
-                  className={`hist-tr longpress-row${row.isDeleted ? ' row-deleted' : ''}${selected.has(row.assetPk) ? ' row-selected' : ''}${pressing === row.assetPk ? ' row-pressing' : ''}${flash === row.assetPk && selected.has(row.assetPk) ? ' row-flash' : ''}`}
-                  onClick={() => open(row)}
-                  tabIndex={0}
-                  role="link"
-                  onKeyDown={(e) => {
-                    if (e.target !== e.currentTarget) return;
-                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(row); }
-                  }}
-                >
-                  <td className="hist-col-pick" onClick={(e) => e.stopPropagation()}>
-                    <input
-                      type="checkbox"
-                      checked={selected.has(row.assetPk)}
-                      onChange={() => toggleRow(row.assetPk)}
-                      aria-label={`Select ${row.assetId || 'this record'}`}
-                    />
-                  </td>
-                  <td className="hist-col-id">
-                    <span className="hist-asset-id">{row.assetId || '—'}</span>
-                    {row.recordedAssetId && row.recordedAssetId !== row.assetId && (
-                      <span className="hist-asset-was">was {row.recordedAssetId}</span>
-                    )}
-                  </td>
-                  {!isSoftware && <td className="hist-muted hist-nowrap">{row.type || '—'}</td>}
-                  <td>{row.assetTag || <span className="hist-gone">no longer in the register</span>}</td>
-                  {!isSoftware && <td className="hist-muted">{row.model || '—'}</td>}
-                  <td>{row.status ? <StatusBadge status={row.status} /> : '—'}</td>
-                  <td className="num-cell">{row.changes.toLocaleString('en-IN')}</td>
-                  <td>
-                    <span className={`hist-chip hist-chip-${row.lastAction}`}>
-                      <Icon size={11} /> {summarise(row, register)}
-                    </span>
-                  </td>
-                  <td className="hist-muted hist-nowrap">{formatWhen(row.lastAt)}</td>
-                  <td className="hist-muted">{row.lastActor || '—'}</td>
-                  <td className="hist-open"><ChevronRight size={15} /></td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-
-        {!loading && !items.length && (
-          <div className="hist-empty-state">
-            {filtered ? (
-              <>Nothing matches these filters.</>
-            ) : (
-              <>
-                Nothing recorded yet. History starts from the first change after this
-                was added, so a register that has not been touched since shows nothing
-                here.
-              </>
-            )}
+            <span>Page {page.toLocaleString('en-IN')} of {totalPages.toLocaleString('en-IN')}</span>
+            <button type="button" onClick={() => setPage((p) => p + 1)} disabled={page >= totalPages}>
+              Next
+            </button>
+            <button type="button" onClick={() => setPage(totalPages)} disabled={page >= totalPages}>
+              Last
+            </button>
           </div>
         )}
-      </div>
-
-      {totalPages > 1 && (
-        <div className="hist-pagination">
-          <button type="button" onClick={() => setPage(1)} disabled={page <= 1}>First</button>
-          <button type="button" onClick={() => setPage((p) => p - 1)} disabled={page <= 1}>
-            Previous
-          </button>
-          <span>Page {page.toLocaleString('en-IN')} of {totalPages.toLocaleString('en-IN')}</span>
-          <button type="button" onClick={() => setPage((p) => p + 1)} disabled={page >= totalPages}>
-            Next
-          </button>
-          <button type="button" onClick={() => setPage(totalPages)} disabled={page >= totalPages}>
-            Last
-          </button>
-        </div>
-      )}
       </div>
     </div>
   );
