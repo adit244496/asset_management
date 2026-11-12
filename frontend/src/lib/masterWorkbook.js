@@ -1,5 +1,6 @@
 import { formatDate, formatDateTime, todayIST } from './dates';
 import { normalizeKey } from './masterFile';
+import { readOptions, uses1904 } from './parser';
 import { USER_COLUMNS, mapRows, rowProblems } from './userImport';
 
 const loadXLSX = () => import('xlsx');
@@ -70,7 +71,8 @@ const COLUMN_HEADERS = {
 
 export async function readMasterWorkbook(file, categories) {
   const XLSX = await loadXLSX();
-  const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: 'array', cellDates: true });
+  const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), readOptions());
+  const date1904 = uses1904(wb);
   let users = null;
   const byName = new Map();
   categories.forEach((c) => [c.plural, c.label, c.key].forEach((n) => byName.set(normalizeKey(n), c)));
@@ -84,7 +86,7 @@ export async function readMasterWorkbook(file, categories) {
       const raw = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: '', raw: true });
       users = { rows: [], rowNumbers: [], sheetName, signInLeftOut: 0 };
       raw.forEach((r) => {
-        const [row] = mapRows([r]).rows;
+        const [row] = mapRows([r], { date1904 }).rows;
         if (!row) return;
         const profileKey = Object.keys(r).find((h) => normalizeKey(h) === 'profile');
         const profile = String(profileKey ? r[profileKey] : '').trim().toLowerCase();

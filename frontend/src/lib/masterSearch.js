@@ -2,7 +2,7 @@ import { filterBy, haystackOf } from './textSearch';
 
 export function masterHaystack(row) {
   if (!row) return '';
-  return haystackOf(row.name, row.description);
+  return haystackOf(row.name, row.code, row.description);
 }
 
 export function filterMasterRows(rows, query) {

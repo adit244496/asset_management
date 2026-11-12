@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Session
 
-from app import crud, mailer, registers
+from app import crud, mailer, registers, secret_serials
 from app.datefmt import DAY, DAY_TIME, to_ist
 from app.models import ApprovalRequest, ApprovalToken, NotificationSettings
 
@@ -295,7 +295,9 @@ def first_frozen_error(db: Session, items) -> Optional[str]:
 
 
 def snapshot(item) -> dict[str, Any]:
-    return {"id": item.id, **{k: getattr(item, k, None) for k in SNAPSHOT_FIELDS}}
+    # A software's licence key is kept masked in the request and its emails.
+    return {"id": item.id, **{k: (secret_serials.shown(item) if k == "srl" else getattr(item, k, None))
+                              for k in SNAPSHOT_FIELDS}}
 
 
 def create_request(db: Session, *, kind: str, register, items: list, user,

@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 
-from app import activity, crud
+from app import activity, crud, type_codes
 from app.api.auth import require_admin, require_superadmin, token_required
 from app.database import get_db
 from app.masters import MASTER_SPECS, MASTERS, get_spec
@@ -37,6 +37,31 @@ def _categories():
          **({"classification": spec.classification} if spec.classification else {})}
         for spec in MASTER_SPECS
     ]
+
+
+def _checked_code(db, spec, data, row=None):
+    """The abbreviation sent for an Asset Type, cleaned and checked to be
+    valid and unused: (code or None, error response or None). Blank on a new
+    type means "make one up" (DES, DES1 ...)."""
+    if "code" not in data:
+        return None, None
+    if spec.key != "type":
+        return None, (jsonify({"detail": "Only Asset Types have an abbreviation."}), 422)
+    code = type_codes.clean_code(data.get("code"))
+    if not code:
+        if row is not None and row.code:
+            return None, (jsonify({"detail": "The abbreviation cannot be blank -- new IDs of "
+                                             "this type are built from it."}), 422)
+        return None, None
+    problem = type_codes.code_problem(code)
+    if problem:
+        return None, (jsonify({"detail": problem}), 422)
+    owner = type_codes.find_code_owner(db, code, exclude_id=row.id if row is not None else None)
+    if owner is not None:
+        return None, (jsonify({"detail": f"The abbreviation {code} is already used by "
+                                         f"'{owner.name}'. Each type needs its own -- try "
+                                         f"{type_codes.suggest_code(code, type_codes.taken_codes(db))}."}), 409)
+    return code, None
 
 
 def _users(db):
@@ -118,6 +143,9 @@ def create_master(current_user, category):
         existing = crud.find_master_by_name(db, spec, name)
         if existing is not None:
             return jsonify({"detail": f"{spec.label} '{existing.name}' already exists."}), 409
+        code, problem = _checked_code(db, spec, data)
+        if problem:
+            return problem
         row = crud.create_master(
             db,
             spec,
@@ -125,6 +153,7 @@ def create_master(current_user, category):
             description=data.get("description"),
             sort_order=data.get("sortOrder"),
             is_active=data.get("isActive", True),
+            code=code,
         )
         return jsonify(crud.master_to_dict(row, spec.key)), 201
 
@@ -185,11 +214,17 @@ def update_master(current_user, category, row_id):
                           "peripheral of that type can be linked to several assets at once.",
             }), 422
 
+        code, problem = _checked_code(db, spec, data, row)
+        if problem:
+            return problem
+        recoded = code and code != (row.code or "")
+
         renamed = name and name != row.name
         activity.note(
             target=f"{spec.label}: {row.name}",
             summary=(f"Renamed {spec.label} {row.name!r} → {name!r}" if renamed
-                     else f"Edited {spec.label} {row.name!r}"),
+                     else f"Edited {spec.label} {row.name!r}")
+                    + (f"; abbreviation {row.code or '(none)'} → {code}" if recoded else ""),
         )
 
         row, assets_updated = crud.update_master(
@@ -201,6 +236,7 @@ def update_master(current_user, category, row_id):
             sort_order=data.get("sortOrder"),
             is_active=data.get("isActive"),
             is_shared=data.get("isShared"),
+            code=code,
         )
         payload = crud.master_to_dict(row, spec.key)
         payload["assetsUpdated"] = assets_updated

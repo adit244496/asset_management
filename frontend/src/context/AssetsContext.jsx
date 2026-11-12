@@ -20,6 +20,7 @@ function normalizeAsset(raw) {
     'linkedPeripherals', 'linkedAssets', 'previousStatus',
     'verification', 'verifiedBy', 'verifiedAt', 'verificationNote',
     'acceptedBySapId',
+    'srlMasked',
     'lifecycle',
     'pendingApproval',
   ].forEach((k) => {

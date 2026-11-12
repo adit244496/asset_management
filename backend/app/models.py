@@ -272,6 +272,23 @@ class AssistantSettings(Base):
     )
 
 
+class AccessSettings(Base):
+    """Who may see what, managed by a superadmin under Admin controls. One row (id 1).
+
+    software_serial_roles: comma-separated profiles that may reveal a
+    software's Serial Number (licence key) with the eye button. A superadmin
+    always may. Everyone else sees it masked (app/secret_serials.py).
+    """
+    __tablename__ = "access_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    software_serial_roles: Mapped[str] = mapped_column(String(100), nullable=False, default="superadmin")
+    updated_by: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+
+
 class MasterBase(Base):
     __abstract__ = True
 
@@ -292,6 +309,10 @@ class AssetType(MasterBase):
     is_shared: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, sort_order=100
     )
+
+    # Abbreviation used in new asset and peripheral IDs (LAP -> LAP_00001).
+    # Unique (index made at startup by app.type_codes.ensure_codes).
+    code: Mapped[str | None] = mapped_column(String(10), nullable=True, sort_order=101)
 
 
 class AssetStatus(MasterBase):

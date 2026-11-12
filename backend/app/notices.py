@@ -6,7 +6,7 @@ from typing import Any, Iterable, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import crud, mailer, registers, roles
+from app import crud, mailer, registers, roles, secret_serials
 from app.datefmt import DAY_TIME, now_ist
 from app.models import User
 
@@ -85,7 +85,7 @@ def transferred(db: Session, item, was: dict, actor: str, onto=None) -> bool:
     label = " · ".join(str(v) for v in (item.asset_id, item.asset_tag, item.model) if v)
 
     facts = [(reg.noun.capitalize(), label),
-             ("Srl No.", item.srl),
+             ("Srl No.", secret_serials.shown(item)),
              ("From", _place(was) + (f" — {was['user']}" if was.get("user") else "")),
              ("To", _place(now) + (f" — {now['user']}" if now.get("user") else ""))]
     if onto is not None:
@@ -129,7 +129,7 @@ def _registration_mail(items: list, who: str, verb: str) -> tuple[str, str, str,
     items = sorted(items, key=lambda i: ((i.po_no or "").strip().lower() or "￿", i.asset_id or ""))
     shown = items[:TABLE_LIMIT]
     cols = ("ID", "Name", "Type", "Model", "Srl No.", "PO No.", "Location", "Assigned to", "Entered by")
-    rows = [(i.asset_id, i.asset_tag, i.type, i.model, i.srl, i.po_no, i.location,
+    rows = [(i.asset_id, i.asset_tag, i.type, i.model, secret_serials.shown(i), i.po_no, i.location,
              getattr(i, "user", None), i.created_by) for i in shown]
     more = len(items) - len(shown)
     what = _count(items)
@@ -289,7 +289,8 @@ def awaiting_verification(db: Session, items: list, actor: str, how: str) -> boo
 
     shown = items[:TABLE_LIMIT]
     cols = ("ID", "Name", "Type", "Model", "Srl No.", "Location", "Entered by")
-    rows = [(i.asset_id, i.asset_tag, i.type, i.model, i.srl, i.location, i.created_by) for i in shown]
+    rows = [(i.asset_id, i.asset_tag, i.type, i.model, secret_serials.shown(i), i.location, i.created_by)
+            for i in shown]
     more = len(items) - len(shown)
     what = _count(items)
     verb = WAITING_HOW.get(how, how)

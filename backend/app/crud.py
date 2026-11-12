@@ -6,7 +6,7 @@ from sqlalchemy import String, func, literal, or_, select, union_all
 from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Session, aliased
 
-from app import registers, roles
+from app import registers, roles, secret_serials
 from app.datefmt import ist_day_start_utc, to_ist, today_ist
 from app.masters import MASTER_SPECS, MASTERS, MasterSpec, specs_for
 from app.models import (
@@ -375,9 +375,29 @@ def validate_asset_fields(
 
     if register is registers.SOFTWARES:
         errors.extend(software_format_errors(data))
+    else:
+        problem = assigned_date_problem(data, effective_status, current, register)
+        if problem:
+            errors.append(problem)
 
     errors.extend(id_format_errors(data, register, current))
     return errors
+
+
+def assigned_date_problem(data: dict[str, Any], status: Any, current: Any = None,
+                          register: Register = ASSETS) -> Optional[str]:
+    """An Assigned Date may only be set (or changed) while the status is In
+    Use. Sending back the date a record already has is not a change."""
+    given = str(data.get("assignedDate") or "").strip()
+    if not given:
+        return None
+    if status is None and current is None:
+        return None  # bulk edit: each record's own status decides, when it is saved
+    stored = str(getattr(current, "assigned_date", None) or "").strip() if current is not None else ""
+    if given == stored or is_in_use(status):
+        return None
+    return (f"{field_label('assignedDate', register)} can only be set while the status is "
+            "In Use -- set the status to In Use first, or leave it blank.")
 
 
 _QUANTITY_RE = re.compile(r"^\d+(\.0+)?$")
@@ -442,7 +462,17 @@ def parse_asset_id(value: Any, register: Register = ASSETS) -> Optional[int]:
     return int(match.group(1)) if match else None
 
 
-def next_asset_id(db: Session, register: Register = ASSETS) -> str:
+def next_asset_id(db: Session, register: Register = ASSETS, item=None) -> str:
+    """The ID for a new record. Assets and peripherals: the type's
+    abbreviation and its running number (LAP_00001 -- app/type_codes.py).
+    Softwares: SFT000001 as before."""
+    if register in registers.HARDWARE:
+        from app import type_codes
+        type_name = getattr(item, "type", None) if item is not None else None
+        if not str(type_name or "").strip():
+            raise ValueError("An asset or peripheral needs its type before it can be numbered.")
+        return type_codes.next_id(db, type_name)
+
     row = db.execute(
         select(Counter).where(Counter.name == register.counter).with_for_update()
     ).scalar_one_or_none()
@@ -575,7 +605,7 @@ def backfill_asset_ids(db: Session, register: Register = ASSETS) -> int:
         return (item.created_at, int(srl) if srl.isdigit() else 10**9, item.id)
 
     for item in sorted(missing, key=order_key):
-        item.asset_id = next_asset_id(db, register)
+        item.asset_id = next_asset_id(db, register, item)
     db.commit()
     return len(missing)
 
@@ -632,7 +662,8 @@ def _apply_asset_fields(asset, data: dict[str, Any]) -> None:
 
     if is_asset:
         note_assignment(asset, user_before)
-        note_assigned_date(asset, user_before, date_before, data)
+    if not is_software:
+        note_assigned_date(asset, user_before, date_before, data, status_before)
 
 
 def in_use_status(db: Session) -> str:
@@ -656,17 +687,40 @@ def today_iso() -> str:
     return today_ist().isoformat()
 
 
-def note_assigned_date(asset, user_before: Any, date_before: Any, data: dict[str, Any]) -> None:
-    holder = str(asset.user or "").strip()
-    if not holder:
+def note_assigned_date(asset, user_before: Any, date_before: Any, data: dict[str, Any],
+                       status_before: Any = None) -> None:
+    """Assigned Date belongs to being In Use (assets and peripherals):
+
+    * In Stock: no Assigned Date -- going from In Use to In Stock removes it.
+    * Any other status but In Use (SOLD, LATER ADDED ...): it cannot be set
+      or changed; a date the record already had is kept (a sold laptop keeps
+      the date it was handed over).
+    * In Use: a date typed in is kept; otherwise it is today's date when the
+      record becomes In Use without one, or (an asset) changes hands.
+    """
+    if is_in_stock(asset.status):
         asset.assigned_date = None
         return
-    if _same_person(user_before, holder):
+    if not is_in_use(asset.status):
+        asset.assigned_date = date_before
         return
+
     given = str(data.get("assignedDate") or "").strip()
     if given and given != str(date_before or "").strip():
+        return  # typed in by the person saving it
+    became_in_use = not is_in_use(status_before)
+
+    if registers.of(asset) is ASSETS:
+        holder = str(asset.user or "").strip()
+        if not holder:
+            asset.assigned_date = None
+            return
+        if not _same_person(user_before, holder) or (became_in_use and not asset.assigned_date):
+            asset.assigned_date = today_iso()
         return
-    asset.assigned_date = today_iso()
+
+    if became_in_use and not asset.assigned_date:
+        asset.assigned_date = today_iso()
 
 
 EVENT_CREATED = "created"
@@ -877,10 +931,13 @@ def _activity_filters(feed, *, query="", actor="", category="", action="",
 
 def activity_row_dict(row, roles_by_actor: dict[str, str]) -> dict[str, Any]:
     summary = row.summary
+    # A register change's category is its register key ('software', ...).
+    old_value = secret_serials.shown_event_value(row.category, row.field, row.old_value)
+    new_value = secret_serials.shown_event_value(row.category, row.field, row.new_value)
     if not summary:
         if row.field:
-            old = row.old_value or "—"
-            new = row.new_value or "—"
+            old = old_value or "—"
+            new = new_value or "—"
             summary = f"{row.field}: {old} → {new}"
         else:
             summary = f"{str(row.action).capitalize()} {row.target or ''}".strip()
@@ -895,8 +952,8 @@ def activity_row_dict(row, roles_by_actor: dict[str, str]) -> dict[str, Any]:
         "summary": summary,
         "target": row.target,
         "field": row.field,
-        "oldValue": row.old_value,
-        "newValue": row.new_value,
+        "oldValue": old_value,
+        "newValue": new_value,
         "outcome": row.outcome,
         "ip": row.ip,
         "source": row.source,
@@ -1151,8 +1208,8 @@ def history_row_to_dict(
         "changes": changes,
         "lastAction": event.action,
         "lastField": event.field,
-        "lastOldValue": event.old_value,
-        "lastNewValue": event.new_value,
+        "lastOldValue": secret_serials.shown_event_value(event.register, event.field, event.old_value),
+        "lastNewValue": secret_serials.shown_event_value(event.register, event.field, event.new_value),
         "lastActor": event.actor,
         "lastAt": event.at.isoformat() if event.at else None,
     }
@@ -1173,8 +1230,8 @@ def event_to_dict(event: AssetEvent) -> dict[str, Any]:
         "assetId": event.asset_number,
         "action": event.action,
         "field": event.field,
-        "oldValue": event.old_value,
-        "newValue": event.new_value,
+        "oldValue": secret_serials.shown_event_value(event.register, event.field, event.old_value),
+        "newValue": secret_serials.shown_event_value(event.register, event.field, event.new_value),
         "actor": event.actor,
         "at": event.at.isoformat() if event.at else None,
     }
@@ -1183,7 +1240,8 @@ def event_to_dict(event: AssetEvent) -> dict[str, Any]:
 LOOKUP_KEYS = ("assetId", "srl", "serviceTag", "assetTag")
 
 _ASSET_ID_LOOSE = re.compile(
-    rf"^({'|'.join(reg.prefix for reg in registers.ALL)})\d+$", re.IGNORECASE
+    rf"^(({'|'.join(reg.prefix for reg in registers.ALL)})\d+|[A-Z][A-Z0-9]{{1,7}}_\d+)$",
+    re.IGNORECASE,
 )
 
 
@@ -1307,7 +1365,7 @@ def create_asset(db: Session, data: dict[str, Any], username: str, register: Reg
     asset = register.model()
     canonicalise_master_values(data, master_value_index(db), register)
     _apply_asset_fields(asset, data)
-    asset.asset_id = next_asset_id(db, register)
+    asset.asset_id = next_asset_id(db, register, asset)
     asset.created_by = username
     asset.updated_by = username
     by_sap_id = settings.VERIFY_NEW_RECORDS and has_sap_id(asset)
@@ -1737,7 +1795,6 @@ def link_peripherals(
 
         db.add(PeripheralLink(peripheral_id=pid, asset_id=asset.id, created_by=username))
         peripheral.assign_count = (peripheral.assign_count or 0) + 1
-        peripheral.assigned_date = today_iso()
 
         kept = was_on if is_shared_peripheral(peripheral, shared) else []
         now_on = sorted({*(a.asset_id or "" for a in kept), asset.asset_id or ""})
@@ -1749,6 +1806,9 @@ def link_peripherals(
         in_use = in_use or in_use_status(db)
         if take_out_of_stock(db, peripheral, asset, username, in_use):
             from_stock.append(peripheral)
+        # Linked = handed over -- an Assigned Date only while it is In Use.
+        if is_in_use(peripheral.status):
+            peripheral.assigned_date = today_iso()
         linked.append(peripheral)
 
     def summary(rows):
@@ -1793,6 +1853,9 @@ def clear_all_assets(db: Session, register: Register = ASSETS) -> None:
     db.query(register.model).delete()
     db.commit()
     reset_asset_id_counter(db, register)
+    if register in registers.HARDWARE:
+        from app import type_codes
+        type_codes.reset_counters(db)
 
 
 def clear_all_registers(db: Session) -> dict[str, int]:
@@ -1811,6 +1874,8 @@ def clear_all_registers(db: Session) -> dict[str, int]:
     db.commit()
     for reg in registers.ALL:
         reset_asset_id_counter(db, reg)
+    from app import type_codes
+    type_codes.reset_counters(db)
     return counts
 
 
@@ -1956,6 +2021,15 @@ def bulk_import_assets(
     for index, raw_row in enumerate(rows):
         row = dict(raw_row)
         notes = sanitize_optional_formats(row, register)
+        if (register is not registers.SOFTWARES and not _blank(row.get("assignedDate"))
+                and not is_in_use(row.get("status"))):
+            notes.append(f"{field_label('assignedDate', register)} is only kept while the status is "
+                         f"In Use (this row is {str(row.get('status') or 'blank').strip()!r}) -- "
+                         "imported without it")
+            row["assignedDate"] = ""
+        if register is registers.SOFTWARES and secret_serials.drop_mask(row):
+            notes.append(f"{field_label('srl', register)} was the hidden placeholder "
+                         f"{secret_serials.MASK} -- imported without a serial number")
 
         row_errors = validate_asset_fields(row, partial=False, register=register)
         reserved = reserved_status_error(row.get("status"))
@@ -2026,7 +2100,7 @@ def bulk_import_assets(
 
         asset = register.model()
         _apply_asset_fields(asset, row)
-        asset.asset_id = next_asset_id(db, register)
+        asset.asset_id = next_asset_id(db, register, asset)
         if duplicates is not None:
             duplicates.add(row, asset.asset_id)
         if srl_key:
@@ -2137,6 +2211,7 @@ def create_master(
     description: Optional[str] = None,
     sort_order: Optional[int] = None,
     is_active: bool = True,
+    code: Optional[str] = None,
 ) -> Any:
     row = spec.new_row(
         name=name.strip(),
@@ -2144,6 +2219,8 @@ def create_master(
         sort_order=_next_sort_order(db, spec) if sort_order is None else int(sort_order),
         is_active=bool(is_active),
     )
+    if code and isinstance(row, AssetType):
+        row.code = code  # checked by the caller; blank -> filled in on flush
     db.add(row)
     db.commit()
     db.refresh(row)
@@ -2224,8 +2301,11 @@ def update_master(
     sort_order: Optional[int] = None,
     is_active: Optional[bool] = None,
     is_shared: Optional[bool] = None,
+    code: Optional[str] = None,
 ) -> tuple[Any, int]:
     renamed = 0
+    if code and isinstance(row, AssetType):
+        row.code = code  # checked by the caller; existing IDs keep the old one
     if name is not None:
         clean = name.strip()
         if clean and clean != row.name:
@@ -2407,6 +2487,7 @@ def master_to_dict(row: Any, category: str) -> dict[str, Any]:
     }
     if isinstance(row, AssetType):
         d["isShared"] = bool(row.is_shared)
+        d["code"] = row.code
     if isinstance(row, Make):
         d["classification"] = row.classification
     return d
@@ -3161,13 +3242,17 @@ def asset_ref(asset) -> dict[str, Any]:
             "assetTag": asset.asset_tag, "model": asset.model}
 
 
-def asset_to_dict(asset, links=None, linked_to=None, shared=None) -> dict[str, Any]:  # noqa: C901
+def asset_to_dict(asset, links=None, linked_to=None, shared=None,  # noqa: C901
+                  reveal_serial: bool = False) -> dict[str, Any]:
     d: dict[str, Any] = {key: getattr(asset, attr) for key, attr in attrs_of(asset).items()}
     d["register"] = registers.of(asset).key
     d["id"] = asset.id
 
     if registers.of(asset) is registers.SOFTWARES:
-        pass
+        # The licence key is masked (XXXX) unless the caller is the data
+        # export; the eye button reveals it on request (app/secret_serials.py).
+        d["srl"] = secret_serials.shown(asset, reveal=reveal_serial)
+        d["srlMasked"] = bool(asset.srl) and not reveal_serial
     elif registers.of(asset) is ASSETS:
         refs = [peripheral_ref(p) for p in (links or [])]
         d["linkedPeripherals"] = refs

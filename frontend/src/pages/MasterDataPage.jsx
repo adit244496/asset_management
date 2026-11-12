@@ -177,10 +177,11 @@ const MasterDataPage = ({ initialTab = null }) => {
   };
 
   const isTypes = active === 'type';
-  const colCount = isTypes ? 4 : 3;
+  const colCount = isTypes ? 5 : 3;
 
   const filterFields = useMemo(() => [
     { key: 'name', label: spec?.label || 'Value', search: true, get: (r) => r.name },
+    ...(isTypes ? [{ key: 'code', label: 'Abbreviation', search: true, get: (r) => r.code }] : []),
     { key: 'description', label: 'Description', search: true, get: (r) => r.description },
     {
       key: 'state', label: 'Active / Retired', get: (r) => (r.isActive ? 'active' : 'retired'),
@@ -323,6 +324,11 @@ const MasterDataPage = ({ initialTab = null }) => {
                     <thead>
                       <tr>
                         <th>{spec?.label || 'Value'}</th>
+                        {isTypes && (
+                          <th title="Starts the ID of every new asset or peripheral of this type, e.g. LAP_00001">
+                            Abbreviation
+                          </th>
+                        )}
                         <th>Description</th>
                         {isTypes && <th>Shared</th>}
                         <th>Actions</th>
@@ -349,6 +355,13 @@ const MasterDataPage = ({ initialTab = null }) => {
                       {!loading && shown.map((row) => (
                         <tr key={row.id} className={row.isActive ? undefined : 'row-retired'}>
                           <td>{row.name}</td>
+                          {isTypes && (
+                            <td>
+                              {row.code
+                                ? <span className="serial-mono" title={`New IDs: ${row.code}_00001, ${row.code}_00002 …`}>{row.code}</span>
+                                : <span className="cell-empty">&mdash;</span>}
+                            </td>
+                          )}
                           <td className="master-desc">{row.description || ''}</td>
                           {isTypes && (
                             <td>

@@ -57,7 +57,7 @@ TOPICS_BY_BLUEPRINT = {
     "auth": {USERS},
     "notifications": {SETTINGS, ASSETS, PERIPHERALS, SOFTWARES},
     "data": set(EVERYTHING),
-    "admin_controls": {ASSISTANT},
+    "admin_controls": {ASSISTANT, SETTINGS},
     "activity": set(),
     "assistant": set(),
 }
@@ -77,6 +77,7 @@ READ_ONLY = frozenset(
         "notifications.send_test",
         "notifications.resend",
         "admin_controls.test_connection",
+        "softwares.reveal_serial",
     }
 )
 

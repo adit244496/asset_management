@@ -2,6 +2,7 @@ from typing import Any, Optional
 
 import segno
 
+from app import secret_serials
 from app.models import Asset
 
 ERROR_LEVEL = "m"
@@ -24,7 +25,7 @@ def qr_payload(asset: Asset) -> str:
     parts = [
         _line("", asset.asset_id),
         _line("", asset.model, MAX_FREE_TEXT),
-        _line("Srl: ", asset.srl),
+        _line("Srl: ", secret_serials.shown(asset)),
         _line("Tag: ", asset.service_tag),
         _line("Type: ", asset.type),
         _line("PO: ", asset.po_no),
@@ -47,7 +48,7 @@ def asset_qr_dict(asset: Asset) -> dict[str, Any]:
         "assetId": asset.asset_id,
         "assetTag": asset.asset_tag,
         "model": asset.model,
-        "srl": asset.srl,
+        "srl": secret_serials.shown(asset),
         "serviceTag": asset.service_tag,
         "site": asset.site,
         "user": asset.user,

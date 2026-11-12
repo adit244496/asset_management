@@ -737,3 +737,24 @@ table.data-table .table-empty {
 ::view-transition-new(root) {
   z-index: 9999;
 }
+
+/* An inline text-style button inside a hint ("Show it here"). */
+.link-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.link-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.field-error-inline {
+  color: var(--critical, #dc2626);
+}

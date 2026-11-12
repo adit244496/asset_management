@@ -11,6 +11,11 @@ const MasterOptionModal = ({ category, label, option, onClose, onSaved }) => {
   const [sortOrder, setSortOrder] = useState(option ? String(option.sortOrder ?? 0) : '');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  // Asset Types only: the abbreviation that starts new IDs (LAP -> LAP_00001).
+  const hasCode = category === 'type';
+  const [code, setCode] = useState(option?.code || '');
+  const cleanCode = code.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  const recoding = isEdit && option?.code && cleanCode && cleanCode !== option.code;
 
   const inUse = option?.inUse || 0;
   const renaming = isEdit && name.trim() && name.trim() !== option.name;
@@ -27,6 +32,15 @@ const MasterOptionModal = ({ category, label, option, onClose, onSaved }) => {
       setError('Display order must be a number.');
       return;
     }
+    if (hasCode && isEdit && option?.code && !cleanCode) {
+      setError('The abbreviation cannot be blank — new IDs of this type are built from it.');
+      return;
+    }
+    if (hasCode && cleanCode && !/^[A-Z][A-Z0-9]{1,7}$/.test(cleanCode)) {
+      setError('The abbreviation must be 2 to 8 letters or digits, starting with a letter (e.g. LAP, HDD, DES1).');
+      return;
+    }
+    const codePart = hasCode && (cleanCode || !isEdit) ? { code: cleanCode } : {};
 
     setSaving(true);
     setError('');
@@ -34,20 +48,23 @@ const MasterOptionModal = ({ category, label, option, onClose, onSaved }) => {
       if (isEdit) {
         const res = await api.patch(
           `/masters/${encodeURIComponent(category)}/${encodeURIComponent(option.id)}`,
-          { name: clean, description: description.trim(), isActive, sortOrder: order },
+          { name: clean, description: description.trim(), isActive, sortOrder: order, ...codePart },
         );
         const moved = res.data?.assetsUpdated || 0;
         onSaved(moved
           ? `${label} renamed to "${clean}" — ${moved.toLocaleString('en-IN')} asset(s) updated to match.`
           : `${label} "${clean}" updated.`);
       } else {
-        await api.post(`/masters/${encodeURIComponent(category)}`, {
+        const res = await api.post(`/masters/${encodeURIComponent(category)}`, {
           name: clean,
           description: description.trim(),
           isActive,
           sortOrder: order,
+          ...codePart,
         });
-        onSaved(`${label} "${clean}" added.`);
+        onSaved(`${label} "${clean}" added`
+          + (res.data?.code ? ` — new IDs of this type: ${res.data.code}_00001, ${res.data.code}_00002 …` : '')
+          + '.');
       }
     } catch (err) {
       setError(errorMessage(err, isEdit ? `Could not update this ${label}.` : `Could not add this ${label}.`));
@@ -93,6 +110,33 @@ const MasterOptionModal = ({ category, label, option, onClose, onSaved }) => {
               <div className="banner banner-info">
                 {inUse.toLocaleString('en-IN')} asset(s) currently use &ldquo;{option.name}&rdquo; and will be
                 updated to &ldquo;{name.trim()}&rdquo; when you save.
+              </div>
+            )}
+
+            {hasCode && (
+              <div className="field">
+                <label htmlFor="masterCode">Abbreviation{isEdit && option?.code ? ' *' : ''}</label>
+                <input
+                  id="masterCode"
+                  className="field-input serial-mono"
+                  type="text"
+                  maxLength={8}
+                  value={code}
+                  placeholder={isEdit ? '' : 'Left blank: first 3 letters (DES, then DES1 …)'}
+                  onChange={(e) => setCode(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())}
+                />
+                <div className="field-hint">
+                  Starts the ID of every new asset or peripheral of this type
+                  {cleanCode ? <> &mdash; <strong>{cleanCode}_00001</strong>, {cleanCode}_00002 &hellip;</> : null}.
+                  {' '}Each type needs its own; no two types can share one.
+                </div>
+              </div>
+            )}
+
+            {recoding && (
+              <div className="banner banner-info">
+                New records of this type will be numbered {cleanCode}_&hellip;. IDs already given
+                ({option.code}_&hellip;) stay as they are.
               </div>
             )}
 

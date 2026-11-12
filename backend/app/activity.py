@@ -44,6 +44,8 @@ ACTION_WORDING = {
     "admin_controls.save_settings": "Saved the AI assistant settings",
     "admin_controls.remove_key": "Removed an AI API key",
     "admin_controls.test_connection": "Tested the AI connection",
+    "admin_controls.save_access": "Changed who can see software serial numbers",
+    "softwares.reveal_serial": "Revealed a software serial number",
 }
 
 REGISTER_WORDING = {

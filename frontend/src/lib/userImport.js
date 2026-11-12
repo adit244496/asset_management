@@ -1,12 +1,14 @@
-import { toISODate } from './parser';
+import { readOptions, toISODate, uses1904 } from './parser';
 import { normalizeHeader } from './schema';
 
 export const USER_COLUMNS = [
   { key: 'fullName', header: 'Full Name', aliases: ['full name', 'name', 'employee name', 'person'] },
   { key: 'email', header: 'Email ID', aliases: ['email id', 'email', 'e-mail', 'mail', 'email address'] },
   { key: 'location', header: 'Location', aliases: ['location', 'office', 'work location'] },
-  { key: 'dateOfJoining', header: 'Date of Joining',
-    aliases: ['date of joining', 'doj', 'joining date', 'date joined'] },
+  {
+    key: 'dateOfJoining', header: 'Date of Joining',
+    aliases: ['date of joining', 'doj', 'joining date', 'date joined']
+  },
 ];
 
 export const TEMPLATE_FILENAME = 'user-upload-template.csv';
@@ -35,7 +37,8 @@ const HEADER_INDEX = (() => {
   return index;
 })();
 
-export function mapRows(json) {
+// `date1904`: the workbook counts dates from 1904 (see parser.uses1904).
+export function mapRows(json, { date1904 = false } = {}) {
   const unmatched = new Set();
   const rows = json.map((raw) => {
     const out = {};
@@ -47,7 +50,7 @@ export function mapRows(json) {
       }
       const value = raw[h];
       out[key] = key === 'dateOfJoining'
-        ? toISODate(value)
+        ? toISODate(value, { date1904 })
         : (value === undefined || value === null ? '' : String(value).trim());
       if (key === 'dateOfJoining' && !out[key] && String(value ?? '').trim()) {
         out[key] = String(value).trim();
@@ -61,9 +64,9 @@ export function mapRows(json) {
 export async function parseUserFile(file) {
   const XLSX = await import('xlsx');
   const data = new Uint8Array(await file.arrayBuffer());
-  const wb = XLSX.read(data, { type: 'array', cellDates: true });
+  const wb = XLSX.read(data, readOptions());
   const sheet = wb.Sheets[wb.SheetNames[0]];
-  return mapRows(XLSX.utils.sheet_to_json(sheet, { defval: '', raw: true }));
+  return mapRows(XLSX.utils.sheet_to_json(sheet, { defval: '', raw: true }), { date1904: uses1904(wb) });
 }
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;

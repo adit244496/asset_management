@@ -1,4 +1,4 @@
-import { isInStock } from './inventory';
+import { isInStock, isInUse } from './inventory';
 import {
   ASSET, PERIPHERAL, REGISTER_KEYS, SOFTWARE, fieldsOf, labelFor, registerOf,
 } from './registers';
@@ -47,7 +47,7 @@ export const COLUMNS = [
   { key: 'dop', label: 'Date of Purchase (DOP)', type: 'date', group: 'procurement', required: false, filterType: 'date', width: 130, headerAliases: ['dop', 'date of purchase'] },
   { key: 'warrantyEnd', label: 'Warranty / AMC End', type: 'date', group: 'procurement', required: false, filterType: 'date', width: 145, headerAliases: ['warranty end', 'warranty', 'warranty expiry', 'warranty expiry date', 'amc end', 'amc expiry', 'warranty / amc end', 'renewal date', 'renewal', 'renews on', 'subscription end', 'licence expiry', 'license expiry'] },
   { key: 'insuranceEnd', label: 'Insurance Expiry', type: 'date', group: 'procurement', required: false, filterType: 'date', width: 135, headerAliases: ['insurance expiry', 'insurance', 'insurance end', 'insurance expiry date', 'insurance end date', 'insurance valid till', 'insurance valid upto', 'insured till'] },
-  { key: 'assignedDate', label: 'Assigned Date', type: 'date', group: 'assignment', required: false, filterType: 'date', width: 130, hint: 'Filled in automatically when it is assigned. Change it only to back-date a hand-over.', headerAliases: ['assigned date', 'assignment date', 'date assigned', 'assigned on', 'date of assignment', 'issue date', 'date of issue'] },
+  { key: 'assignedDate', label: 'Assigned Date', type: 'date', group: 'assignment', required: false, filterType: 'date', width: 130, hint: 'Only while the status is In Use. Filled in automatically when it is handed over; change it only to back-date a hand-over.', headerAliases: ['assigned date', 'assignment date', 'date assigned', 'assigned on', 'date of assignment', 'issue date', 'date of issue'] },
 
   { key: 'comments', label: 'Comments', type: 'textarea', group: 'notes', required: false, filterType: 'text', width: 200, headerAliases: ['comments', 'comment', 'remarks'] },
 
@@ -181,6 +181,14 @@ export function validateAsset(values, {
   if (register && !errors.srl) {
     const owner = findSerialOwner(register, values.srl, selfId);
     if (owner) errors.srl = serialTakenMessage(owner);
+  }
+
+  // Assigned Date: only set while In Use. Keeping the date a record already
+  // has is fine (a sold record keeps the date it was handed over).
+  const assigned = String(values.assignedDate ?? '').trim();
+  if (!software && !errors.assignedDate && assigned && !isInUse(values.status)
+    && assigned !== String(original?.assignedDate ?? '').trim()) {
+    errors.assignedDate = 'Only while the status is In Use';
   }
   return errors;
 }

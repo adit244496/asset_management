@@ -235,6 +235,7 @@ _REGISTER_EXTRA_PATCHES: dict[str, list] = {}
 
 _ASSET_TYPE_COLUMN_PATCHES = [
     ("is_shared", "BOOLEAN NOT NULL DEFAULT FALSE", None),
+    ("code", "VARCHAR(10)", None),
 ]
 
 
@@ -453,7 +454,13 @@ def create_app() -> Flask:
                 "Change this on the Master Data screen.", ", ".join(shared)
             )
 
+        from app import type_codes
+        for type_name, code in type_codes.ensure_codes(db):
+            logger.warning("Gave Asset Type %r the abbreviation %s (new IDs: %s).",
+                           type_name, code, type_codes.format_id(code, 1))
+
         from app.registers import ALL as ALL_REGISTERS
+        from app.registers import SOFTWARES
 
         for reg in ALL_REGISTERS:
             crud.ensure_asset_id_counter(db, reg)
@@ -473,7 +480,10 @@ def create_app() -> Flask:
             if sold:
                 logger.warning("Stored the buyer's name alone on %d sold %s.", sold, reg.plural)
 
-            moved = crud.compact_asset_ids(db, reg)
+            # Asset and peripheral IDs are permanent (they carry the type's
+            # abbreviation and are printed on labels), so they are never
+            # renumbered to close gaps. Softwares keep doing so.
+            moved = crud.compact_asset_ids(db, reg) if reg is SOFTWARES else 0
             if moved:
                 logger.warning("Closed gaps in %s numbering: %d %s renumbered.",
                                reg.id_label, moved, reg.plural)

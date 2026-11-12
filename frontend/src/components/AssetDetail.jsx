@@ -3,6 +3,7 @@ import { columnsFor, groupsFor } from '../lib/schema';
 import { useAssets } from '../context/AssetsContext';
 import { NOT_RECORDED, isNotRecorded } from '../lib/notRecorded';
 import { WARRANTY_LABELS, daysUntilExpiry, warrantyState } from '../lib/warranty';
+import SecretSerial from './SecretSerial';
 import StatusBadge from './StatusBadge';
 import './AssetDetail.css';
 
@@ -71,7 +72,9 @@ const AssetDetail = ({ asset, omit = [] }) => {
                       ? <StatusBadge status={asset.status} />
                       : (isNotRecorded(asset[col.key])
                         ? <span className="asset-detail-empty">{NOT_RECORDED}</span>
-                        : showValue(asset, col.key))}
+                        : (col.key === 'srl'
+                          ? <SecretSerial record={{ ...asset, register: reg }} className="" />
+                          : showValue(asset, col.key)))}
                   </dd>
                 </div>
               ))}

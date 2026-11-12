@@ -28,16 +28,41 @@ function pad(n) {
   return s.length < 2 ? `0${s}` : s;
 }
 
-export function toISODate(value) {
+const DAY_MS = 86400000;
+// Excel's day 0 (1900 date system). Day numbers are counted in plain calendar
+// days, so they are converted with UTC arithmetic only: no time zone may ever
+// touch them, or a date entered as 15-09-2026 becomes 14-09-2026 in India
+// (local midnight, UTC+5:30, is the previous day in UTC).
+const EXCEL_EPOCH_MS = Date.UTC(1899, 11, 30);
+// Workbooks saved in the 1904 date system (old Mac Excel) count from 1904.
+const DAYS_1900_TO_1904 = 1462;
+
+const ymd = (y, m, d) => `${y}-${pad(m)}-${pad(d)}`;
+
+// True when the workbook uses the 1904 date system.
+export function uses1904(workbook) {
+  return Boolean(workbook?.Workbook?.WBProps?.date1904);
+}
+
+// Options for XLSX.read: cells keep Excel's day numbers (no cellDates), which
+// toISODate turns into dates without a time-zone shift. A new object each
+// time -- XLSX.read writes into the options it is given.
+export const readOptions = () => ({ type: 'array', cellDates: false });
+
+export function toISODate(value, { date1904 = false } = {}) {
   if (value === null || value === undefined || value === '') return '';
   if (value instanceof Date && !isNaN(value)) {
-    return value.toISOString().slice(0, 10);
+    // A date made in this browser stands for that calendar day here: read
+    // its local fields, never toISOString() (that is UTC, a day early in IST).
+    return ymd(value.getFullYear(), value.getMonth() + 1, value.getDate());
   }
   if (typeof value === 'number') {
-    const epoch = new Date(Date.UTC(1899, 11, 30));
-    const d = new Date(epoch.getTime() + value * 86400000);
-    if (!isNaN(d)) return d.toISOString().slice(0, 10);
-    return '';
+    if (!Number.isFinite(value) || value < 1 || value > 2958465) return '';
+    // Whole days only (a time of day is ignored). The small allowance absorbs
+    // floating-point noise such as 45915.9999999 for 45916.
+    const days = Math.floor(value + 1e-7) + (date1904 ? DAYS_1900_TO_1904 : 0);
+    const d = new Date(EXCEL_EPOCH_MS + days * DAY_MS);
+    return ymd(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
   }
   const s = String(value).trim();
   if (!s) return '';
@@ -55,8 +80,10 @@ export function toISODate(value) {
       return `${yr}-${pad(mon)}-${pad(day)}`;
     }
   }
+  // Anything else ("15 Sep 2026", "Sep 15, 2026"): the browser reads it as
+  // local midnight, so take the local calendar fields.
   const parsed = new Date(s);
-  if (!isNaN(parsed)) return parsed.toISOString().slice(0, 10);
+  if (!isNaN(parsed)) return ymd(parsed.getFullYear(), parsed.getMonth() + 1, parsed.getDate());
   return '';
 }
 
@@ -68,7 +95,8 @@ export async function parseFile(file) {
     reader.onload = (e) => {
       try {
         const data = new Uint8Array(e.target.result);
-        const wb = XLSX.read(data, { type: 'array', cellDates: true });
+        const wb = XLSX.read(data, readOptions());
+        const date1904 = uses1904(wb);
         const sheetName = wb.SheetNames[0];
         const sheet = wb.Sheets[sheetName];
         const json = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: true });
@@ -88,7 +116,7 @@ export async function parseFile(file) {
               const col = columnFor(key);
               const val = rawRow[h];
               if (col.type === 'date') {
-                out[key] = toISODate(val);
+                out[key] = toISODate(val, { date1904 });
               } else {
                 out[key] = val === undefined || val === null ? '' : String(val).trim();
               }

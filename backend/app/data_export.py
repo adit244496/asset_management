@@ -87,7 +87,10 @@ def register_columns(register) -> list[tuple[str, str]]:
 def register_dicts(db: Session, register, waiting: bool = False) -> list[dict]:
     items = crud.list_unverified(db, register) if waiting else crud.list_assets(db, register)
     if register is registers.SOFTWARES:
-        return [crud.asset_to_dict(s) for s in items]
+        # The export is the register's backup: it carries the real licence
+        # keys (it is superadmin-only, or emailed to the recipients set on
+        # Notifications). Everywhere else they are masked.
+        return [crud.asset_to_dict(s, reveal_serial=True) for s in items]
     if register is registers.ASSETS:
         links = crud.linked_peripherals_map(db, [a.id for a in items])
         return [crud.asset_to_dict(a, links=links.get(a.id)) for a in items]

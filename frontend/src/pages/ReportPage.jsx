@@ -21,6 +21,7 @@ import RestoreModal from '../components/RestoreModal';
 import SoftwareMoveModal from '../components/SoftwareMoveModal';
 import { isInStock as isInStockStatus } from '../lib/inventory';
 import ScanSerialsModal from '../components/ScanSerialsModal';
+import SecretSerial from '../components/SecretSerial';
 import StatusBadge from '../components/StatusBadge';
 import { useAssets } from '../context/AssetsContext';
 import { useAuth } from '../context/AuthContext';
@@ -1339,6 +1340,8 @@ const ReportPage = () => {
                         <td key={col.key}>
                           {isNotRecorded(row[col.key]) ? (
                             <span className="cell-empty">{NOT_RECORDED}</span>
+                          ) : col.key === 'srl' ? (
+                            <SecretSerial record={row} />
                           ) : (
                             <span className="serial-mono">{row[col.key]}</span>
                           )}

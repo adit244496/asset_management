@@ -4,7 +4,9 @@ from flask import Blueprint, jsonify, request, send_file
 
 from typing import Any
 
-from app import activity, approvals, crud, history_export, joiners, notices, qrcodes, registers, roles
+from app import (
+    activity, approvals, crud, history_export, joiners, notices, qrcodes, registers, roles, secret_serials,
+)
 from app.api.auth import (
     require_admin, require_edit, require_superadmin, require_write, token_required,
 )
@@ -145,6 +147,8 @@ def make_blueprint(register: Register) -> Blueprint:
     @require_write
     def create_asset(current_user):
         data = request.get_json(silent=True) or {}
+        if is_software:
+            secret_serials.drop_mask(data)  # a cloned XXXX is not a serial number
         errors = crud.validate_asset_fields(data, partial=False, register=register)
         reserved = crud.reserved_status_error(data.get("status"))
         if reserved:
@@ -187,6 +191,10 @@ def make_blueprint(register: Register) -> Blueprint:
     @require_edit
     def update_asset(current_user, asset_id):
         data = request.get_json(silent=True) or {}
+        if is_software:
+            # The form shows the licence key as XXXX; sent back unchanged, it
+            # means "keep the saved one".
+            secret_serials.drop_mask(data)
         with get_db() as db:
             asset = crud.get_asset(db, asset_id, register)
             if asset is None:
@@ -838,6 +846,32 @@ def make_blueprint(register: Register) -> Blueprint:
                 "unknownMastersMode": unknown_masters,
                 "normalised": normalised,
             })
+
+    if is_software:
+        @bp.route("/serial-access", methods=["GET"])
+        @token_required
+        def serial_access(current_user):
+            """May this profile reveal licence keys with the eye button?"""
+            with get_db() as db:
+                return jsonify({"canReveal": secret_serials.can_reveal(db, current_user.role),
+                                "mask": secret_serials.MASK})
+
+        @bp.route("/<asset_id>/serial", methods=["POST"])
+        @token_required
+        def reveal_serial(current_user, asset_id):
+            """The eye button: one software's real Serial Number, for a profile
+            allowed under Admin controls. Each reveal is in the Activity Log."""
+            with get_db() as db:
+                item = crud.get_asset(db, asset_id, register)
+                if item is None or hidden_from(current_user, item):
+                    return jsonify({"detail": f"{Noun} not found"}), 404
+                if not secret_serials.can_reveal(db, current_user.role):
+                    return jsonify({"detail": "Your profile is not allowed to see software serial "
+                                              "numbers. A superadmin can allow it under Admin controls."}), 403
+                activity.note(target=item.asset_id,
+                              summary=f"Revealed the serial number of {item.asset_id}"
+                                      + (f" ({item.asset_tag})" if item.asset_tag else ""))
+                return jsonify({"id": item.id, "assetId": item.asset_id, "srl": item.srl or ""})
 
     return bp
 

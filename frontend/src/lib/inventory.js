@@ -6,6 +6,13 @@ export function isInStock(status) {
   return IN_STOCK.test((status ?? '').toString().trim());
 }
 
+const IN_USE = /^in[\s_-]*use$/i;
+
+// An Assigned Date belongs to being In Use (backend crud.note_assigned_date).
+export function isInUse(status) {
+  return IN_USE.test((status ?? '').toString().trim());
+}
+
 export function inStockOnly(rows) {
   return (rows || []).filter((r) => r && !r.isDeleted && isInStock(r.status));
 }

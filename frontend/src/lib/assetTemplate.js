@@ -124,9 +124,10 @@ export function templateFieldGuide(columns, optionsFor, registerKey = null) {
         + 'that has none. Not stored on the asset. Optional.');
     }
     if (col.key === 'assignedDate') {
-      notes.push('When it was handed to the Assigned User. Leave blank and the import '
-        + 'date is used for every row with an Assigned User; fill it in only to record '
-        + 'an earlier hand-over. Ignored for a row with nobody assigned.');
+      notes.push('When it was handed over. Kept only on a row whose Status is In Use — '
+        + 'on any other status (In Stock, SOLD …) it is left out and the row is still imported. '
+        + 'Leave blank and the import date is used for an In Use row; fill it in only to record '
+        + 'an earlier hand-over.');
     }
     if (col.digits) {
       notes.push(`Exactly ${col.digits} digits, numbers only — a row with any other value is not `

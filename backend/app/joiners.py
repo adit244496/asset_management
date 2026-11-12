@@ -6,7 +6,7 @@ from typing import Any, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import crud, mailer, registers
+from app import crud, mailer, registers, secret_serials
 from app.datefmt import DAY, DAY_TIME, display_date, now_ist, to_ist
 from app.models import AssetEvent, User
 
@@ -86,8 +86,9 @@ def check(db: Session, items_before: list[tuple[Any, Any]], actor: str,
             "location": account.location,
             "username": account.username, "joined": account.date_of_joining,
             "created": _aware(account.created_at).isoformat(), "items": []})
-        entry["items"].append({k: getattr(item, k, None) for k in
-                               ("asset_id", "asset_tag", "type", "model", "srl", "location", "department")})
+        entry["items"].append({k: (secret_serials.shown(item) if k == "srl" else getattr(item, k, None))
+                               for k in ("asset_id", "asset_tag", "type", "model", "srl", "location",
+                                         "department")})
 
     for person in by_person.values():
         mailer.run_in_background(_send, person, actor, days)

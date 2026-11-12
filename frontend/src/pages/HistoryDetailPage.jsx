@@ -5,6 +5,7 @@ import { errorMessage } from '../api';
 import Banner from '../components/Banner';
 import HistoryGroup from '../components/HistoryGroup';
 import HistoryReport from '../components/HistoryReport';
+import SecretSerial from '../components/SecretSerial';
 import StatusBadge from '../components/StatusBadge';
 import { useAssets } from '../context/AssetsContext';
 import { useAuth } from '../context/AuthContext';
@@ -89,7 +90,9 @@ const HistoryDetailPage = () => {
                 <span>{asset.model || '—'}</span>
                 <span>{asset.user || '—'}</span>
                 <span>{[asset.site, asset.floor].filter(Boolean).join(' · ') || '—'}</span>
-                {asset.srl && <span className="hist-detail-srl">Srl {asset.srl}</span>}
+                {asset.srl && (
+                  <span className="hist-detail-srl">Srl <SecretSerial record={asset} className="" /></span>
+                )}
               </div>
             </div>
 

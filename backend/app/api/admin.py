@@ -1,16 +1,17 @@
-"""Admin controls: the AI assistant's provider, model and API keys.
+"""Admin controls: the AI assistant's provider, model and API keys, and who
+may see what (software serial numbers).
 
 Superadmin only, on every route. Keys are write-only: they can be pasted,
 replaced or removed, but no response ever contains one.
 """
 from flask import Blueprint, jsonify, request
 
-from app import activity
+from app import activity, secret_serials
 from app.api.auth import require_superadmin, token_required
 from app.assistant import control, engine
 from app.database import get_db
 
-bp = Blueprint("admin_controls", __name__, url_prefix="/api/admin/assistant")
+bp = Blueprint("admin_controls", __name__, url_prefix="/api/admin")
 
 
 def _body(row) -> dict:
@@ -20,7 +21,7 @@ def _body(row) -> dict:
     return out
 
 
-@bp.route("", methods=["GET"])
+@bp.route("/assistant", methods=["GET"])
 @token_required
 @require_superadmin
 def get_settings(current_user):
@@ -28,7 +29,7 @@ def get_settings(current_user):
         return jsonify(_body(control.get_row(db)))
 
 
-@bp.route("", methods=["PUT"])
+@bp.route("/assistant", methods=["PUT"])
 @token_required
 @require_superadmin
 def save_settings(current_user):
@@ -43,7 +44,7 @@ def save_settings(current_user):
         return jsonify(_body(row))
 
 
-@bp.route("/keys/<provider>", methods=["DELETE"])
+@bp.route("/assistant/keys/<provider>", methods=["DELETE"])
 @token_required
 @require_superadmin
 def remove_key(current_user, provider):
@@ -57,7 +58,7 @@ def remove_key(current_user, provider):
         return jsonify(_body(row))
 
 
-@bp.route("/test", methods=["POST"])
+@bp.route("/assistant/test", methods=["POST"])
 @token_required
 @require_superadmin
 def test_connection(current_user):
@@ -73,3 +74,30 @@ def test_connection(current_user):
                           + (" with an unsaved key" if key else "")
                           + (": OK" if result["ok"] else f": failed ({result['message'][:160]})"))
     return jsonify(result)
+
+
+@bp.route("/access", methods=["GET"])
+@token_required
+@require_superadmin
+def get_access(current_user):
+    with get_db() as db:
+        return jsonify(secret_serials.settings_dict(db))
+
+
+@bp.route("/access", methods=["PUT"])
+@token_required
+@require_superadmin
+def save_access(current_user):
+    """Which profiles may reveal software serial numbers (the eye button)."""
+    data = request.get_json(silent=True) or {}
+    wanted = data.get("softwareSerialRoles")
+    if not isinstance(wanted, list):
+        return jsonify({"detail": "softwareSerialRoles must be a list of profiles."}), 422
+    with get_db() as db:
+        before = secret_serials.reveal_roles(db)
+        kept, problem = secret_serials.set_reveal_roles(db, wanted, current_user.username)
+        if problem:
+            return jsonify({"detail": problem}), 422
+        activity.note(summary="Software serial numbers can now be revealed by: " + ", ".join(kept)
+                              + ("" if kept != before else " (no change)"))
+        return jsonify(secret_serials.settings_dict(db))

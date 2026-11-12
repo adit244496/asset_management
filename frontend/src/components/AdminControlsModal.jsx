@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Bot, CheckCircle2, KeyRound, PlugZap, ShieldCheck, Trash2, X, XCircle,
+  Bot, CheckCircle2, EyeOff, KeyRound, PlugZap, ShieldCheck, Trash2, X, XCircle,
 } from 'lucide-react';
 import api, { errorMessage } from '../api';
 import { formatDateTime } from '../lib/dates';
@@ -37,6 +37,49 @@ const AdminControlsModal = ({ onClose }) => {
   const savedRef = useRef(null);
   useEffect(() => { draftRef.current = draft; savedRef.current = saved; }, [draft, saved]);
 
+  // Who may reveal software serial numbers (the eye button).
+  const [access, setAccess] = useState(null);
+  const [accessDraft, setAccessDraft] = useState([]);
+  const [savingAccess, setSavingAccess] = useState(false);
+  const [accessNote, setAccessNote] = useState(null);
+  const accessDirtyRef = useRef(false);
+  const showAccess = useCallback((data) => {
+    setAccess(data);
+    setAccessDraft(data.softwareSerialRoles || []);
+  }, []);
+  const accessDirty = Boolean(access)
+    && [...accessDraft].sort().join() !== [...(access.softwareSerialRoles || [])].sort().join();
+  useEffect(() => { accessDirtyRef.current = accessDirty; }, [accessDirty]);
+
+  useEffect(() => {
+    let live = true;
+    api.get('/admin/access').then((res) => { if (live) showAccess(res.data); }).catch(() => { });
+    return () => { live = false; };
+  }, [showAccess]);
+
+  useLiveEvent(TOPIC.settings, () => {
+    api.get('/admin/access')
+      .then((res) => { if (accessDirtyRef.current) setAccess(res.data); else showAccess(res.data); })
+      .catch(() => { });
+  });
+
+  const toggleRole = (role) => setAccessDraft((list) => (
+    list.includes(role) ? list.filter((r) => r !== role) : [...list, role]));
+
+  const saveAccess = async () => {
+    setSavingAccess(true);
+    setAccessNote(null);
+    try {
+      const res = await api.put('/admin/access', { softwareSerialRoles: accessDraft });
+      showAccess(res.data);
+      setAccessNote({ ok: true, text: 'Saved. It applies straight away for everyone.' });
+    } catch (err) {
+      setAccessNote({ ok: false, text: errorMessage(err, 'Could not save.') });
+    } finally {
+      setSavingAccess(false);
+    }
+  };
+
   const show = useCallback((data) => {
     setSaved(data);
     setDraft(draftOf(data));
@@ -68,7 +111,7 @@ const AdminControlsModal = ({ onClose }) => {
         if (untouched) show(res.data);
         else setSaved(res.data);
       })
-      .catch(() => {  });
+      .catch(() => { });
   });
 
   if (!saved || !draft) {
@@ -289,6 +332,45 @@ const AdminControlsModal = ({ onClose }) => {
               );
             })}
           </div>
+
+          {access && (
+            <section className="admin-card admin-access">
+              <h3><EyeOff size={15} /> Software serial numbers</h3>
+              <p className="admin-muted">
+                Software serial numbers (licence keys) are shown as {access.mask || 'XXXX'} everywhere.
+                The profiles ticked here get an eye button beside them to see one; each time it is used,
+                it is recorded in the Activity Log.
+              </p>
+              <div className="admin-roles" role="group" aria-label="Profiles that can see software serial numbers">
+                {access.choices.map((role) => {
+                  const always = (access.alwaysAllowed || []).includes(role);
+                  return (
+                    <label key={role} className={`admin-provider${accessDraft.includes(role) || always ? ' active' : ''}`}
+                      title={always ? 'A superadmin can always see them' : undefined}>
+                      <input
+                        type="checkbox"
+                        checked={always || accessDraft.includes(role)}
+                        disabled={always || savingAccess}
+                        onChange={() => toggleRole(role)}
+                      />
+                      <span className="admin-role-name">{role}</span>
+                    </label>
+                  );
+                })}
+              </div>
+              <div className="admin-test-row">
+                <button type="button" className="btn-secondary" onClick={saveAccess}
+                  disabled={savingAccess || !accessDirty}>
+                  {savingAccess ? 'Saving…' : 'Save who can see them'}
+                </button>
+                {accessNote && (
+                  <span className={`admin-test ${accessNote.ok ? 'is-ok' : 'is-bad'}`} role="status">
+                    {accessNote.ok ? <CheckCircle2 size={14} /> : <XCircle size={14} />} {accessNote.text}
+                  </span>
+                )}
+              </div>
+            </section>
+          )}
 
           {saved.updatedBy && (
             <p className="admin-muted admin-foot-note">

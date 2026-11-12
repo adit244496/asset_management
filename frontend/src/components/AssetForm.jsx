@@ -1,7 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { errorMessage } from '../api';
 import { useAssets } from '../context/AssetsContext';
-import { isInStock } from '../lib/inventory';
-import { ASSET } from '../lib/registers';
+import { isInStock, isInUse } from '../lib/inventory';
+import { ASSET, SOFTWARE } from '../lib/registers';
+import { SERIAL_MASK, isSerialMask, revealSerial, useSerialAccess } from '../lib/serialAccess';
 import { columnsFor, groupsFor } from '../lib/schema';
 import AssignedUserField from './AssignedUserField';
 import BarcodeInput from './BarcodeInput';
@@ -17,6 +19,21 @@ const AssetForm = ({
 }) => {
   const { formOptionsFor, register: current } = useAssets();
   const reg = register || current;
+  const canRevealSerial = useSerialAccess();
+  const [keyHiddenAtStart] = useState(() => isSerialMask(values?.srl));
+  const [revealing, setRevealing] = useState(false);
+  const [revealError, setRevealError] = useState('');
+  const showSavedSerial = async () => {
+    setRevealing(true);
+    setRevealError('');
+    try {
+      onChange('srl', await revealSerial(values.id));
+    } catch (err) {
+      setRevealError(errorMessage(err, 'Could not show the serial number.'));
+    } finally {
+      setRevealing(false);
+    }
+  };
   const allColumns = columnsFor(reg);
   const picked = onlyFields
     ? onlyFields.map((key) => allColumns.find((c) => c.key === key)).filter(Boolean)
@@ -144,13 +161,36 @@ const AssetForm = ({
     }
 
     if (col.scannable) {
+      // A software's saved serial number comes masked (XXXX): the box starts
+      // empty, and left empty the saved key is kept (the server ignores XXXX).
+      const hiddenKey = reg === SOFTWARE && col.key === 'srl' && isSerialMask(value);
       return (
-        <BarcodeInput
-          id={id}
-          value={value}
-          invalid={invalid}
-          onChange={(v) => onChange(col.key, col.key === 'srl' ? String(v ?? '').toUpperCase() : v)}
-        />
+        <>
+          <BarcodeInput
+            id={id}
+            value={hiddenKey ? '' : value}
+            invalid={invalid}
+            placeholder={hiddenKey ? `Saved and hidden (${SERIAL_MASK}) — leave empty to keep it` : undefined}
+            onChange={(v) => onChange(col.key, col.key === 'srl'
+              // Emptied again: keep the saved (hidden) key rather than erase it.
+              ? (String(v ?? '').toUpperCase() || (reg === SOFTWARE && keyHiddenAtStart ? SERIAL_MASK : ''))
+              : v)}
+          />
+          {hiddenKey && (
+            <p className="field-hint">
+              The saved serial number is hidden. Scan or type a new one only to replace it.
+              {canRevealSerial && values.id && (
+                <>
+                  {' '}
+                  <button type="button" className="link-btn" disabled={revealing} onClick={showSavedSerial}>
+                    {revealing ? 'Loading…' : 'Show it here'}
+                  </button>
+                </>
+              )}
+              {revealError && <span className="field-error-inline"> {revealError}</span>}
+            </p>
+          )}
+        </>
       );
     }
 
@@ -177,6 +217,29 @@ const AssetForm = ({
           value={value}
           onChange={(e) => onChange(col.key, e.target.value)}
         />
+      );
+    }
+
+    // Assigned Date only while In Use: read-only otherwise (removed on the
+    // way into stock, kept as it was for other statuses such as SOLD).
+    if (col.key === 'assignedDate' && reg !== SOFTWARE && !isInUse(values.status)) {
+      const stock = isInStock(values.status);
+      return (
+        <>
+          <DateInput
+            id={id}
+            className="field-input"
+            value={stock ? '' : value}
+            onChange={() => { }}
+            disabled
+            placeholder={stock ? 'None — it is in stock' : 'Only while In Use'}
+          />
+          <p className="field-hint">
+            {stock
+              ? (value ? 'Going into stock removes the Assigned Date when you save.' : 'Nothing is assigned while it is in stock.')
+              : `Can only be set while the status is In Use${value ? ' — the saved date is kept' : ''}.`}
+          </p>
+        </>
       );
     }
 
@@ -214,7 +277,9 @@ const AssetForm = ({
         {col.required && !released(col.key) && !optionalInStock(col.key) ? ' *' : ''}
       </label>
       {renderControl(col)}
-      {col.hint && !col.generated && <p className="field-hint">{col.hint}</p>}
+      {col.hint && !col.generated
+        && !(col.key === 'assignedDate' && !isInUse(values.status))
+        && <p className="field-hint">{col.hint}</p>}
       <div className="field-error">{errors[col.key] || ''}</div>
     </div>
   );

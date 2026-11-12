@@ -5,7 +5,7 @@ from typing import Any, Optional
 
 from sqlalchemy.orm import Session
 
-from app import crud, registers, roles
+from app import crud, registers, roles, secret_serials
 from app.assistant import guide
 from app.assistant import reports as R
 from app.assistant.reports import ToolError  # noqa: F401 -- raised here, caught in run()
@@ -287,7 +287,8 @@ def _compact(item) -> dict:
     if reg is registers.SOFTWARES:
         out = {
             "register": reg.key, "softwareId": item.asset_id, "name": item.asset_tag,
-            "version": item.version, "status": item.status, "serial": item.srl,
+            # Licence keys stay masked for the AI too (app/secret_serials.py).
+            "version": item.version, "status": item.status, "serial": secret_serials.shown(item),
             "seats": item.quantity, "renewalDate": item.warranty_end, "price": item.price,
             "vendorOrUser": item.vendor, "poNumber": item.po_no, "scrapped": bool(item.is_deleted),
         }

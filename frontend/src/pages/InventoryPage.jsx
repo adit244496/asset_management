@@ -4,6 +4,7 @@ import { Package } from 'lucide-react';
 import api, { errorMessage } from '../api';
 import Banner from '../components/Banner';
 import SearchBox from '../components/SearchBox';
+import SecretSerial from '../components/SecretSerial';
 import { formatIfDate } from '../lib/dates';
 import { REGISTER_TOPICS, useLiveTick } from '../lib/live';
 import { countByType, filterStock, inStockOnly } from '../lib/inventory';
@@ -200,7 +201,8 @@ const InventoryPage = () => {
                       <td className="inv-id">{row.assetId}</td>
                       <td>{cell(row.type)}</td>
                       <td>{cell(row.model)}</td>
-                      <td>{cell(row.srl)}</td>
+                      <td>{row.srl && !isNotRecorded(row.srl)
+                        ? <SecretSerial record={row} className="" /> : cell(row.srl)}</td>
                       <td>{cell(row.location)}</td>
                       <td>{cell(row.company)}</td>
                     </tr>

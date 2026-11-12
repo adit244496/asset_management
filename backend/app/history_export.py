@@ -6,7 +6,7 @@ from typing import Any, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import crud, registers, xlsx
+from app import crud, registers, secret_serials, xlsx
 from app.datefmt import DAY_TIME, display_date, now_ist, to_ist
 from app.models import AssetEvent
 from app.registers import Register
@@ -40,6 +40,11 @@ def _value(field: Optional[str], value: Optional[str]) -> str:
     return value or ""
 
 
+def _shown(ev: AssetEvent, value: Optional[str]) -> str:
+    """A history value as written to the file: a software's serial is masked."""
+    return _value(ev.field, secret_serials.shown_event_value(ev.register, ev.field, value))
+
+
 def _latest(row: dict[str, Any], register: Register) -> str:
     if row["lastAction"] == "updated" and row["lastField"]:
         return _label(row["lastField"], register)
@@ -53,7 +58,7 @@ def _change(ev: AssetEvent, register: Register) -> str:
     if ev.action == "verified" and ev.field == "sapId":
         return f"Verified by SAP ID {ev.new_value}" if ev.new_value else action
     field = _label(ev.field, register)
-    old, new = _value(ev.field, ev.old_value), _value(ev.field, ev.new_value)
+    old, new = _shown(ev, ev.old_value), _shown(ev, ev.new_value)
     if old and new:
         return f"{field}: {old} → {new}"
     if new:
@@ -107,7 +112,7 @@ def history_workbook(db: Session, register: Register, saved_by: str, applied: li
         trail.append([
             *identity(by_pk.get(ev.asset_pk, {}), ev.asset_number or ""), n, _when(ev.at),
             ACTION_LABELS.get(ev.action, ev.action), _label(ev.field, register) if ev.field else "",
-            _value(ev.field, ev.old_value), _value(ev.field, ev.new_value), _change(ev, register),
+            _shown(ev, ev.old_value), _shown(ev, ev.new_value), _change(ev, register),
             ev.actor or "",
         ])
 
