@@ -33,10 +33,11 @@ export const REGISTERS = {
     many: 'softwares',
     idPrefix: 'SFT',
     fields: ['assetTag', 'version', 'status', 'srl', 'quantity', 'poNo',
-      'warrantyEnd', 'price', 'vendor', 'comments'],
+      'startDate', 'warrantyEnd', 'price', 'vendor', 'comments'],
     labels: {
       assetId: 'Software ID',
       assetTag: 'Software Name',
+      status: 'Usage',
       srl: 'Serial Number',
       poNo: 'PO Number',
       warrantyEnd: 'Renewal Date',

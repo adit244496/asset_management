@@ -12,6 +12,7 @@ import { useAuth } from '../context/AuthContext';
 import { formatDate } from '../lib/dates';
 import { groupEvents } from '../lib/historyGroups';
 import { REGISTER_TOPICS, useLiveTick } from '../lib/live';
+import { SOFTWARE } from '../lib/registers';
 import '../components/AssetHistory.css';
 import './HistoryDetailPage.css';
 
@@ -86,27 +87,47 @@ const HistoryDetailPage = () => {
               <div className="hist-detail-id">{asset.assetId}</div>
               <h1>{asset.assetTag || asset.model}</h1>
               <div className="hist-detail-facts">
-                <StatusBadge status={asset.status} />
-                <span>{asset.model || '—'}</span>
-                <span>{asset.user || '—'}</span>
-                <span>{[asset.site, asset.floor].filter(Boolean).join(' · ') || '—'}</span>
+                {asset.isPurged
+                  ? <span className="hist-detail-purged">Deleted permanently</span>
+                  : <StatusBadge status={asset.status} record={asset} register={asset.register || register} />}
+                {/* Model, holder and place are hardware facts -- a software has none. */}
+                {(asset.register || register) !== SOFTWARE && (
+                  <>
+                    <span>{asset.model || '—'}</span>
+                    <span>{asset.user || '—'}</span>
+                    <span>{[asset.site || asset.location, asset.floor].filter(Boolean).join(' · ') || '—'}</span>
+                  </>
+                )}
                 {asset.srl && (
-                  <span className="hist-detail-srl">Srl <SecretSerial record={asset} className="" /></span>
+                  <span className="hist-detail-srl">
+                    Srl {asset.isPurged ? <span className="serial-mono">{asset.srl}</span>
+                      : <SecretSerial record={asset} className="" />}
+                  </span>
                 )}
               </div>
+              {asset.isPurged && (
+                <p className="hist-detail-gone">
+                  Deleted permanently
+                  {asset.deletedAt ? ` on ${formatDate(asset.deletedAt.slice(0, 10))}` : ''}
+                  {asset.deletedBy ? ` by ${asset.deletedBy}` : ''}. The record is gone from the
+                  register; its movement history is kept here.
+                </p>
+              )}
             </div>
 
             <div className="hist-detail-actions">
               <button type="button" className="btn-secondary" onClick={() => window.print()}>
                 <Download size={14} /> Download PDF
               </button>
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => navigate('/report', { state: { search: asset.assetId } })}
-              >
-                <Table size={14} /> Show in Report Section
-              </button>
+              {!asset.isPurged && (
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => navigate('/report', { state: { search: asset.assetId } })}
+                >
+                  <Table size={14} /> Show in Report Section
+                </button>
+              )}
             </div>
           </div>
 

@@ -22,7 +22,7 @@ const DataEntryPage = () => {
   const {
     assets, createAsset, register, meta, setRegister,
   } = useAssets();
-  const { isAdmin } = useAuth();
+  const { isAdmin, isSuperadmin } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const cloneValues = location.state?.cloneValues;
@@ -141,11 +141,11 @@ const DataEntryPage = () => {
         text: `${one} "${created.assetTag || created.model}" `
           + `saved as ${created.assetId}.`
           + (created.verification === 'pending'
-            ? ' It is waiting in Verification, and joins the register once another verifier '
-            + 'has checked it. If it is sent back, correct it there and it is resubmitted.'
-            : '')
-          + (created.acceptedBySapId
-            ? ' It has a SAP ID, so it went straight into the register without verification.'
+            ? (isSuperadmin
+              ? ' It is waiting in Verification, and joins the register once it is verified '
+              + '— as superadmin you can verify it yourself there.'
+              : ' It is waiting in Verification, and joins the register once another verifier '
+              + 'has checked it. If it is sent back, correct it there and it is resubmitted.')
             : '')
           + (created.linkedPeripheralsText
             ? ` Linked ${created.linkedPeripherals.length} peripheral(s): `

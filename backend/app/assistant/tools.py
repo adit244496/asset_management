@@ -78,8 +78,7 @@ _FILTERS = {
     "make": _text("Manufacturer, e.g. 'DELL'; empty string for any."),
     "department": _text("Department name; empty string for any."),
     "company": _text("Company name; empty string for any."),
-    "vendor": _text("Software only: Vendor / Used By (a vendor or the person using it); "
-                    "empty string for any."),
+    "vendor": _text("Software only: Vendor Name; empty string for any."),
 }
 
 _RANGE = {
@@ -119,7 +118,7 @@ TOOLS = [
         "count_records",
         "Count records, optionally grouped by one field or two (e.g. laptops per "
         "location; location by status), or their average age since purchase. For "
-        "software, measure 'total_seats' adds up Quantity and 'total_value' adds up Price. "
+        "software, measure 'total_seats' adds up Quantity and 'total_value' adds up Price per License. "
         "Set show_table true when the person asked for a breakdown or summary: they then "
         "see the table. Scrapped records are left out unless include_scrapped is true.",
         {
@@ -186,13 +185,12 @@ TOOLS = [
         "the change: they see a Confirm button, and nothing happens unless they press "
         "it. kind 'update_fields' sets fields; kind 'transfer' moves an asset or "
         "peripheral to a location and optionally a person (or, for a peripheral in use, "
-        "onto an asset); kind 'move' is for SOFTWARE only -- assign seats from stock to "
-        "a person, or move seats back to stock, some or all of them. List only the "
-        "fields being changed; for a transfer or move, leave fields empty. Look the "
-        "record up first.",
+        "onto an asset). Software is never assigned to a person or transferred: only "
+        "update_fields applies to it. List only the fields being changed; for a "
+        "transfer, leave fields empty. Look the record up first.",
         {
             "identifier": {"type": "string", "description": "The record, as for get_record."},
-            "kind": {"type": "string", "enum": ["update_fields", "transfer", "move"]},
+            "kind": {"type": "string", "enum": ["update_fields", "transfer"]},
             "reason": {"type": "string", "description": "One short sentence, shown to the person, saying what this does."},
             "fields": {
                 "type": "array",
@@ -218,18 +216,6 @@ TOOLS = [
                     "allow_elsewhere": {"type": "boolean", "description": "True only if the person confirmed the recipient sits somewhere other than the destination."},
                 },
                 "required": ["to_location", "to_floor", "to_person", "onto_asset", "allow_elsewhere"],
-                "additionalProperties": False,
-            },
-            "move": {
-                "type": "object",
-                "description": "For kind 'move' (software). Otherwise action 'none', quantity 0, to_person empty.",
-                "properties": {
-                    "action": {"type": "string", "enum": ["assign", "stock", "none"],
-                               "description": "'assign': out of stock to to_person. 'stock': back into stock."},
-                    "quantity": {"type": "integer", "description": "How many seats; the whole record if it is all of them."},
-                    "to_person": _text("For 'assign': full name or username from the user directory; else empty string."),
-                },
-                "required": ["action", "quantity", "to_person"],
                 "additionalProperties": False,
             },
         },
@@ -290,7 +276,7 @@ def _compact(item) -> dict:
             # Licence keys stay masked for the AI too (app/secret_serials.py).
             "version": item.version, "status": item.status, "serial": secret_serials.shown(item),
             "seats": item.quantity, "renewalDate": item.warranty_end, "price": item.price,
-            "vendorOrUser": item.vendor, "poNumber": item.po_no, "scrapped": bool(item.is_deleted),
+            "vendorName": item.vendor, "poNumber": item.po_no, "scrapped": bool(item.is_deleted),
         }
         return {k: v for k, v in out.items() if v not in (None, "")}
     out = {
@@ -322,7 +308,7 @@ def _full(db: Session, item) -> dict:
                "availability": d.get("availability"), "serial": d.get("srl"),
                "seats": d.get("quantity"), "poNumber": d.get("poNo"),
                "renewalDate": d.get("warrantyEnd"), "price": d.get("price"),
-               "vendorOrUser": d.get("vendor"), "comment": _clip(d.get("comments")),
+               "vendorName": d.get("vendor"), "comment": _clip(d.get("comments")),
                "isDeleted": d.get("isDeleted"), "updatedBy": d.get("updatedBy"),
                "updatedAt": d.get("updatedAt")}
         return {k: v for k, v in out.items() if v not in (None, "", False)}
@@ -545,6 +531,8 @@ def _store(ctx: ToolContext, item, kind: str, method: str, path: str,
 
 
 def _propose_update(ctx: ToolContext, item, fields: list, reason: str) -> dict:
+    if crud.software_expired(item):
+        raise ToolError(crud.expired_edit_error(item))
     reg = registers.of(item)
     current = crud.asset_to_dict(item)
     changes: dict[str, Any] = {}
@@ -563,7 +551,7 @@ def _propose_update(ctx: ToolContext, item, fields: list, reason: str) -> dict:
         if reg is registers.SOFTWARES and name not in SOFTWARE_EDITABLE:
             raise ToolError(f"A software record has no {name}. Its fields are: "
                             f"{', '.join(sorted(SOFTWARE_EDITABLE - {'warranty_end'}))}. "
-                            "To give seats to someone or take them back, use kind 'move'.")
+                            "Software is not assigned to people.")
         if reg is not registers.SOFTWARES and name in SOFTWARE_ONLY_EDITABLE:
             raise ToolError(f"{name} is a software field; {item.asset_id} is "
                             f"{'an asset' if reg is registers.ASSETS else 'a peripheral'}.")
@@ -581,6 +569,9 @@ def _propose_update(ctx: ToolContext, item, fields: list, reason: str) -> dict:
     reserved = crud.reserved_status_error(changes.get("status"))
     if reserved:
         problems = [*problems, reserved]
+    wrong_type = crud.type_use_error(ctx.db, reg, changes, item)
+    if wrong_type:
+        problems = [*problems, wrong_type]
     if problems:
         raise ToolError("That change would be refused: " + "; ".join(problems))
 
@@ -653,42 +644,6 @@ def _propose_transfer(ctx: ToolContext, item, transfer: dict, reason: str) -> di
     return _store(ctx, item, "transfer", "POST", path, payload, diff, reason)
 
 
-def _propose_move(ctx: ToolContext, item, move: dict, reason: str) -> dict:
-    m = move or {}
-    action = m.get("action")
-    if action not in (crud.MOVE_ASSIGN, crud.MOVE_STOCK):
-        raise ToolError("For kind 'move', action must be 'assign' (from stock to a person) or "
-                        "'stock' (back into stock).")
-    total = item.quantity or 1
-    quantity = m.get("quantity") or total
-    problem = crud.software_move_error(item, action, quantity)
-    if problem:
-        raise ToolError(problem)
-    quantity = int(quantity)
-    payload: dict[str, Any] = {"action": action, "quantity": quantity}
-    reg = registers.SOFTWARES
-    if action == crud.MOVE_ASSIGN:
-        if not (m.get("to_person") or "").strip():
-            raise ToolError("Assigning needs a person: ask who it goes to (to_person).")
-        holder = _find_person(ctx.db, m["to_person"])
-        payload["userId"] = holder.id
-        target_status, target_vendor = crud.in_use_status(ctx.db), holder.full_name or holder.username
-    else:
-        target_status, target_vendor = crud.in_stock_status(ctx.db), None
-    seats = f"{quantity} of {total}" if quantity < total else f"all {total}"
-    diff = [
-        {"field": "quantity", "label": "Seats moved", "from": None, "to": seats},
-        _diff("status", item.status, target_status, reg),
-        _diff("vendor", item.vendor, target_vendor, reg),
-    ]
-    if quantity < total:
-        diff.append({"field": "split", "label": "Record", "from": None,
-                     "to": f"{item.asset_id} keeps {total - quantity}; the {quantity} moved join "
-                           f"{(target_vendor + chr(39) + 's') if action == crud.MOVE_ASSIGN else 'the stock'} "
-                           f"{item.asset_tag} record, or a new one if there is none"})
-    return _store(ctx, item, "move", "POST", f"/{reg.plural}/{item.id}/move", payload, diff, reason)
-
-
 def propose_change(ctx: ToolContext, args: dict) -> dict:
     _gate(ctx)
     item = _resolve_one(ctx.db, args.get("identifier") or "")
@@ -701,13 +656,9 @@ def propose_change(ctx: ToolContext, args: dict) -> dict:
         return _propose_update(ctx, item, args.get("fields") or [], args.get("reason") or "")
     if kind == "transfer":
         if is_software:
-            raise ToolError("Software has no location to transfer to. To give seats to someone, "
-                            "or take them back into stock, use kind 'move'.")
+            raise ToolError("Software is not transferred or assigned to people -- it has no "
+                            "location or holder. Only its fields can be changed (update_fields).")
         return _propose_transfer(ctx, item, args.get("transfer") or {}, args.get("reason") or "")
-    if kind == "move":
-        if not is_software:
-            raise ToolError("kind 'move' is for software. Assets and peripherals use 'transfer'.")
-        return _propose_move(ctx, item, args.get("move") or {}, args.get("reason") or "")
     raise ToolError(f"Unknown kind {kind!r}.")
 
 

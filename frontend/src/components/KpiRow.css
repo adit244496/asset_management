@@ -10,7 +10,8 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  padding: 14px 16px;
+  /* Slim tiles, so the charts below get the height. */
+  padding: 8px 14px 9px;
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -34,9 +35,9 @@
 }
 
 .kpi-value {
-  margin-top: 6px;
+  margin-top: 2px;
   font-family: var(--font-display);
-  font-size: 26px;
+  font-size: 21px;
   font-weight: 800;
   letter-spacing: -0.03em;
   line-height: 1.1;
@@ -52,7 +53,7 @@
 }
 
 .kpi-sub {
-  margin-top: 5px;
+  margin-top: 1px;
   font-size: 11px;
   color: var(--text-muted);
   white-space: nowrap;

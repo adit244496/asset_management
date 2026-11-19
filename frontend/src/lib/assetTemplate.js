@@ -1,3 +1,5 @@
+import { usageOptions } from './inventory';
+
 export function templateColumns(columns) {
   return columns.filter((col) => !col.generated);
 }
@@ -63,6 +65,7 @@ const SOFTWARE_EXAMPLE_VALUES = {
   version: '2021 LTSC',
   srl: 'XXXXX-XXXXX-XXXXX-XXXXX',
   quantity: '25',
+  startDate: '01-04-2026',
   warrantyEnd: '31-03-2027',
   price: '125000',
   vendor: 'Microsoft (via Rediff Infotech)',
@@ -95,9 +98,12 @@ export function templateFieldGuide(columns, optionsFor, registerKey = null) {
 
     if (col.key === 'srl') {
       notes.push(software
-        ? 'The licence serial or product key. Optional, but no two licences may share one.'
+        ? 'The licence serial or product key. Optional; several licences may share the same one.'
         : 'The serial number on the device. Fine to leave blank and scan or type it in later.');
-      notes.push('Letters, numbers and hyphens only — a row with a space, / or any other symbol in it '
+      notes.push(registerKey === 'peripheral'
+        ? 'Letters, numbers, spaces and hyphens only — a row with /, a dot or any other symbol in it '
+        + 'is not imported. Saved in capitals.'
+        : 'Letters, numbers and hyphens only — a row with a space, / or any other symbol in it '
         + 'is not imported. Saved in capitals.');
     }
     if (col.key === 'quantity') {
@@ -108,7 +114,14 @@ export function templateFieldGuide(columns, optionsFor, registerKey = null) {
         + 'is cleared and reported, and the rest of the row is still imported. Optional.');
     }
     if (software && col.key === 'warrantyEnd') {
-      notes.push('When the licence or subscription is next due for renewal. Optional.');
+      notes.push('When the licence or subscription is next due for renewal. Optional. '
+        + 'Once it has passed, the software shows as Expired.');
+    }
+    if (software && col.key === 'startDate') {
+      notes.push('When the licence or subscription started. Optional; not after the Renewal Date.');
+    }
+    if (software && col.key === 'status') {
+      notes.push('In Use or In Stock. A row with any other value is not imported.');
     }
     if (col.key === 'sapId') {
       notes.push('This record’s number in SAP, copied exactly as SAP shows it. '
@@ -142,14 +155,17 @@ export function templateFieldGuide(columns, optionsFor, registerKey = null) {
       notes.push('Must be a valid address, or left blank. An unusable value is cleared and reported, and the rest of the row is still imported.');
     }
     if (col.type === 'select') {
-      const values = (typeof optionsFor === 'function' ? optionsFor(col.key) : null) || col.options || [];
+      const listed = (typeof optionsFor === 'function' ? optionsFor(col.key) : null) || col.options || [];
+      const values = software && col.key === 'status' ? usageOptions(listed) : listed;
       if (values.length) {
         const shown = values.slice(0, MAX_LISTED_VALUES).join(', ');
         notes.push(values.length > MAX_LISTED_VALUES
           ? `Current values include: ${shown}, and ${values.length - MAX_LISTED_VALUES} more.`
           : `Current values: ${shown}.`);
       }
-      notes.push('A value that is not on the list yet is added to the master list automatically.');
+      if (!(software && col.key === 'status')) {
+        notes.push('A value that is not on the list yet is added to the master list automatically.');
+      }
     }
     if (col.required) {
       notes.push('A row with this left blank is not imported.');

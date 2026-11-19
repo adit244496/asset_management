@@ -2,7 +2,7 @@ import {
   AlertTriangle, CheckCircle2, ExternalLink, FileSpreadsheet, FileText, QrCode, Sheet, ShieldCheck,
 } from 'lucide-react';
 import { QR_LIMIT, tableCell } from '../lib/assistantReports';
-import { registerOf } from '../lib/registers';
+import { SOFTWARE, registerOf } from '../lib/registers';
 
 const busyLabel = (busy, id, use, label) => (busy === `${id}:${use}` ? 'Preparing…' : label);
 
@@ -36,9 +36,11 @@ export const ReportCard = ({ item, busy, onRun }) => {
         <button type="button" className="asst-chip" disabled={disabled} onClick={() => onRun(item, 'open')}>
           <ExternalLink size={13} /> {busyLabel(busy, item.id, 'open', 'Open in Report')}
         </button>
-        <button type="button" className="asst-chip" disabled={disabled} onClick={() => onRun(item, 'qr')}>
-          <QrCode size={13} /> {busyLabel(busy, item.id, 'qr', `QR labels${qrNote}`)}
-        </button>
+        {item.register !== SOFTWARE && (
+          <button type="button" className="asst-chip" disabled={disabled} onClick={() => onRun(item, 'qr')}>
+            <QrCode size={13} /> {busyLabel(busy, item.id, 'qr', `QR labels${qrNote}`)}
+          </button>
+        )}
       </div>
     </div>
   );

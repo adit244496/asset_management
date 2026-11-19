@@ -9,6 +9,15 @@ from app.database import get_db
 bp = Blueprint("users", __name__, url_prefix="/api/users")
 
 
+def _truthy(value, default: bool) -> bool:
+    """A JSON flag: missing -> default; false/"false"/0/"no" -> False."""
+    if value is None:
+        return default
+    if isinstance(value, str):
+        return value.strip().lower() not in ("false", "0", "no", "off", "")
+    return bool(value)
+
+
 def _joining_error(data) -> str | None:
     value = data.get("dateOfJoining")
     if value is None or not str(value).strip():
@@ -36,8 +45,12 @@ def create_user(current_user):
     password = data.get("password") or ""
     full_name = (data.get("fullName") or "").strip()
     role = data.get("role") or roles.ASSIGNEE
+    # The password is one an admin chose, so by default the person must set
+    # their own at first sign-in. The form's tick box can turn this off.
+    must_change = _truthy(data.get("mustChangePassword"), default=True)
 
-    activity.note(target=username, summary=f"Created account {username!r} as {role}")
+    activity.note(target=username, summary=f"Created account {username!r} as {role}"
+                  + (" (must set own password at first sign-in)" if must_change and roles.can_sign_in(role) else ""))
 
     if not username or not password or not full_name:
         return jsonify({"detail": "username, password, and fullName are required"}), 400
@@ -62,6 +75,7 @@ def create_user(current_user):
                                 full_name=full_name, role=role,
                                 email=data.get("email"),
                                 location=data.get("location"),
+                                must_change_password=must_change,
                                 date_of_joining=data.get("dateOfJoining"))
         return jsonify(crud.user_out_dict(user)), 201
 
@@ -98,11 +112,18 @@ def update_user(current_user, user_id):
         if user is None:
             return jsonify({"detail": "User not found"}), 404
 
+        # A password reset by an admin for someone else: that person must set
+        # their own at next sign-in (unless the tick box was cleared). Changing
+        # your own password here never forces it.
+        resetting_other = bool(data.get("password")) and user.id != current_user.id
+        must_change = (_truthy(data.get("mustChangePassword"), default=True)
+                       if resetting_other else None)
+
         changes = []
         if role and role != user.role:
             changes.append(f"profile {user.role} → {role}")
         if data.get("password"):
-            changes.append("password reset")
+            changes.append("password reset" + (" (must set own at next sign-in)" if must_change else ""))
         if "isActive" in data and bool(data.get("isActive")) != bool(user.is_active):
             changes.append("deactivated" if not data.get("isActive") else "reactivated")
         for key, label in (("fullName", "name"), ("email", "email"), ("location", "location"),
@@ -136,6 +157,7 @@ def update_user(current_user, user_id):
             email=data.get("email"),
             location=data.get("location"),
             date_of_joining=data.get("dateOfJoining"),
+            must_change_password=must_change,
         )
         return jsonify(crud.user_out_dict(user))
 

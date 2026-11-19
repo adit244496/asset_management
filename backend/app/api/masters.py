@@ -9,6 +9,9 @@ bp = Blueprint("masters", __name__, url_prefix="/api/masters")
 
 MAX_BULK_ITEMS = 1000
 
+# What makes a Type: fixed once it is added (delete it and add it again).
+TYPE_FIXED_FIELDS = ("name", "code", "usedFor", "description", "sortOrder")
+
 
 def _truthy(value: str | None) -> bool:
     return str(value or "").strip().lower() in ("1", "true", "yes")
@@ -42,11 +45,11 @@ def _categories():
 def _checked_code(db, spec, data, row=None):
     """The abbreviation sent for an Asset Type, cleaned and checked to be
     valid and unused: (code or None, error response or None). Blank on a new
-    type means "make one up" (DES, DES1 ...)."""
+    type means "make one up" (DES, DE1 ...)."""
     if "code" not in data:
         return None, None
     if spec.key != "type":
-        return None, (jsonify({"detail": "Only Asset Types have an abbreviation."}), 422)
+        return None, (jsonify({"detail": "Only Types have an abbreviation."}), 422)
     code = type_codes.clean_code(data.get("code"))
     if not code:
         if row is not None and row.code:
@@ -62,6 +65,21 @@ def _checked_code(db, spec, data, row=None):
                                          f"'{owner.name}'. Each type needs its own -- try "
                                          f"{type_codes.suggest_code(code, type_codes.taken_codes(db))}."}), 409)
     return code, None
+
+
+def _checked_use(spec, data):
+    """'Used for' sent for an Asset Type -- which Data Entry offers it:
+    (asset / peripheral / both or None, error response or None)."""
+    if "usedFor" not in data:
+        return None, None
+    if spec.key != "type":
+        return None, (jsonify({"detail": "Only Types have a 'Used for'."}), 422)
+    if not str(data.get("usedFor") or "").strip():
+        return None, None
+    use = type_codes.clean_use(data.get("usedFor"))
+    if use is None:
+        return None, (jsonify({"detail": "Used for must be Assets, Peripherals or Both."}), 422)
+    return use, None
 
 
 def _users(db):
@@ -146,6 +164,9 @@ def create_master(current_user, category):
         code, problem = _checked_code(db, spec, data)
         if problem:
             return problem
+        use, problem = _checked_use(spec, data)
+        if problem:
+            return problem
         row = crud.create_master(
             db,
             spec,
@@ -154,8 +175,30 @@ def create_master(current_user, category):
             sort_order=data.get("sortOrder"),
             is_active=data.get("isActive", True),
             code=code,
+            used_for=use,
         )
         return jsonify(crud.master_to_dict(row, spec.key)), 201
+
+
+@bp.route("/type/new-codes", methods=["POST"])
+@token_required
+@require_admin
+def plan_type_codes(current_user):
+    """Before a bulk import: the abbreviation each type it would add to
+    Master Data would get, so they can be seen and changed first. Also the
+    abbreviations already taken (a changed one must not be one of them)."""
+    data = request.get_json(silent=True) or {}
+    names = data.get("names")
+    if not isinstance(names, list):
+        return jsonify({"detail": "names must be a list of type names"}), 422
+    if len(names) > MAX_BULK_ITEMS:
+        return jsonify({"detail": f"Too many types at once ({len(names)}). At most {MAX_BULK_ITEMS}."}), 422
+    with get_db() as db:
+        return jsonify({
+            "items": type_codes.plan_new_codes(db, names),
+            "taken": sorted(type_codes.taken_codes(db)),
+            "length": type_codes.CODE_LEN,
+        })
 
 
 @bp.route("/<category>/bulk", methods=["POST"])
@@ -175,8 +218,11 @@ def bulk_create_master(current_user, category):
             "detail": f"Too many values at once ({len(items)}). Please paste at most {MAX_BULK_ITEMS}.",
         }), 422
 
+    use, problem = _checked_use(spec, data)  # Types: the sub-list (Assets / Peripherals) they go to
+    if problem:
+        return problem
     with get_db() as db:
-        added, skipped, errors, created = crud.bulk_create_masters(db, spec, items)
+        added, skipped, errors, created = crud.bulk_create_masters(db, spec, items, used_for=use)
         return jsonify({
             "added": added,
             "skipped": skipped,
@@ -199,6 +245,21 @@ def update_master(current_user, category, row_id):
         if row is None:
             return jsonify({"detail": f"{spec.label} not found"}), 404
 
+        # A Type is fixed once added: its name, abbreviation, sub-list (Assets /
+        # Peripherals), description and order cannot be changed here. Only
+        # retiring / reactivating it and the peripheral "shared" setting can.
+        if spec.key == "type":
+            fixed = [k for k in TYPE_FIXED_FIELDS if k in data]
+            if fixed:
+                activity.note(target=f"{spec.label}: {row.name}",
+                              summary=f"Refused: edit {spec.label} {row.name!r} ({', '.join(fixed)})")
+                return jsonify({
+                    "detail": (f"A type cannot be edited. To change '{row.name}', delete it and add it "
+                               "again -- a type still used by records cannot be deleted; retire it "
+                               "instead and add the new one."),
+                    "code": "type_fixed",
+                }), 422
+
         name = data.get("name")
         if name is not None:
             name = str(name).strip()
@@ -210,7 +271,7 @@ def update_master(current_user, category, row_id):
 
         if "isShared" in data and spec.key != "type":
             return jsonify({
-                "detail": "isShared applies to Asset Types only -- it says whether a "
+                "detail": "isShared applies to Types only -- it says whether a "
                           "peripheral of that type can be linked to several assets at once.",
             }), 422
 
@@ -218,13 +279,19 @@ def update_master(current_user, category, row_id):
         if problem:
             return problem
         recoded = code and code != (row.code or "")
+        use, problem = _checked_use(spec, data)
+        if problem:
+            return problem
+        reused = use and use != type_codes.use_of(row)
 
         renamed = name and name != row.name
         activity.note(
             target=f"{spec.label}: {row.name}",
             summary=(f"Renamed {spec.label} {row.name!r} → {name!r}" if renamed
                      else f"Edited {spec.label} {row.name!r}")
-                    + (f"; abbreviation {row.code or '(none)'} → {code}" if recoded else ""),
+                    + (f"; abbreviation {row.code or '(none)'} → {code}" if recoded else "")
+                    + (f"; used for {type_codes.USE_LABELS[type_codes.use_of(row)]} → "
+                       f"{type_codes.USE_LABELS[use]}" if reused else ""),
         )
 
         row, assets_updated = crud.update_master(
@@ -237,6 +304,7 @@ def update_master(current_user, category, row_id):
             is_active=data.get("isActive"),
             is_shared=data.get("isShared"),
             code=code,
+            used_for=use,
         )
         payload = crud.master_to_dict(row, spec.key)
         payload["assetsUpdated"] = assets_updated

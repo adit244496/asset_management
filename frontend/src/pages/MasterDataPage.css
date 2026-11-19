@@ -126,6 +126,25 @@
   cursor: pointer;
 }
 
+/* Type: a type offered in both lists says so beside its name. */
+.master-both-tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+.master-type-note {
+  margin: -4px 0 10px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
 .master-desc {
   max-width: 320px;
   white-space: normal;

@@ -44,7 +44,7 @@ const MultiHistoryModal = ({ records, register, noun = 'record', onClose }) => {
               {[record.assetTag, record.model].filter(Boolean).join(' · ') || `This ${noun}`}
             </span>
           </div>
-          {record.status && <StatusBadge status={record.status} />}
+          {record.status && <StatusBadge status={record.status} record={record} register={register} />}
           <span className="multi-hist-pos">{(index + 1).toLocaleString('en-IN')} of {total.toLocaleString('en-IN')}</span>
         </div>
 

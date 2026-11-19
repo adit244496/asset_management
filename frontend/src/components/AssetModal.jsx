@@ -2,14 +2,18 @@ import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, History, X } from 'lucide-react';
 import { errorMessage } from '../api';
 import { useAssets } from '../context/AssetsContext';
-import { ASSET } from '../lib/registers';
+import { ASSET, SOFTWARE, labelFor } from '../lib/registers';
 import { emptyAsset, validateAsset } from '../lib/schema';
+import { isSerialMask } from '../lib/serialAccess';
 import AssetForm from './AssetForm';
 import AssetHistory from './AssetHistory';
 
 const AssetModal = ({
   asset, onClose, sentBack = null, onSaved = null, onlyFields = null, fieldLabels = null,
   focusLink = false, highlightLink = false,
+  // Every field of the record, leaving out the values the system works out
+  // itself (Asset ID, Site, Availability, Linked To) -- so all shown is editable.
+  editableOnly = false,
 }) => {
   const { assets, updateAsset, register, meta } = useAssets();
   const [values, setValues] = useState(() => ({ ...emptyAsset(asset?.register || register), ...asset }));
@@ -45,6 +49,22 @@ const AssetModal = ({
       setErrors(found);
       setError('Please fix the highlighted fields below.');
       return;
+    }
+
+    // The serial number box was emptied: say so and ask before removing it --
+    // not for software, whose Serial Number may simply be left blank.
+    const savedSerial = String(asset?.srl ?? '').trim();
+    const removingSerial = (asset?.register || register) !== SOFTWARE
+      && savedSerial && !String(values.srl ?? '').trim()
+      && (!onlyFields || onlyFields.includes('srl'));
+    if (removingSerial) {
+      const label = labelFor('srl', 'Srl No.', asset?.register || register);
+      const which = isSerialMask(savedSerial) ? 'its serial number' : `serial number ${savedSerial}`;
+      const ok = window.confirm(
+        `${label} is empty.\n\nSaving will remove ${which} from ${asset.assetId || 'this record'}. `
+        + 'This is recorded in its history.\n\nRemove it and save?',
+      );
+      if (!ok) return;
     }
 
     let toLink = linked;
@@ -123,6 +143,7 @@ const AssetModal = ({
             linkHighlight={focusLink || highlightLink}
             onlyFields={onlyFields}
             fieldLabels={fieldLabels}
+            hideGenerated={editableOnly}
           />
 
           <div className="asset-history-section">

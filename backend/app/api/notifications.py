@@ -98,11 +98,14 @@ def send_test(current_user):
     data = request.get_json(silent=True) or {}
     with get_db() as db:
         cfg = approvals.get_settings(db)
-        to_list = mailer.split_addresses(data.get("to") or cfg.it_head_email)
+        group = approvals.SOFTWARE if data.get("group") == approvals.SOFTWARE else approvals.HARDWARE
+        to_list = mailer.split_addresses(data.get("to")) or approvals.it_heads(cfg, group)
         to = ", ".join(to_list)
-        activity.note(summary=f"Sent a test email to {to or '(nobody)'}")
+        activity.note(summary=f"Sent a test email to {to or '(nobody)'} "
+                              f"({approvals.GROUP_LABELS[group]})")
         if not to:
-            return jsonify({"detail": ["Enter the IT head's email address first (and save)."]}), 422
+            head = "software head" if group == approvals.SOFTWARE else "IT head"
+            return jsonify({"detail": [f"Enter the {head}'s email address first (and save)."]}), 422
         try:
             mailer.send(cfg, to_list, "IT Asset Engine: test email",
                         f"This is a test from IT Asset Engine, sent by {current_user.username}.\n"
@@ -179,19 +182,21 @@ def link_decide():
     note = (data.get("note") or "").strip()
     with get_db() as db:
         cfg = approvals.get_settings(db)
-        who = approvals.it_head_label(cfg)
-        activity.note(actor=who, actor_role="it head")
+        req, tok, problem = approvals.resolve_token(db, token)
+        group = approvals.group_of(req.register) if req is not None else approvals.HARDWARE
+        who = approvals.it_head_label(cfg, group)
+        activity.note(actor=who, actor_role="software head" if group == approvals.SOFTWARE else "it head")
         if decision not in ("approve", "reject"):
             return jsonify({"detail": "decision must be approve or reject"}), 422
         if decision == "reject" and not note:
             return jsonify({"detail": "Say why it is rejected -- the person who asked will see it."}), 422
-        req, tok, problem = approvals.resolve_token(db, token)
         if problem:
             activity.note(summary=f"Refused an approval link: {problem}")
             return jsonify({"detail": problem}), 409 if req is not None else 404
         what = approvals._what(req, len(approvals.request_dict(req)["items"]))
         activity.note(target=req.id[:8],
-                      summary=f"IT head {'approved' if decision == 'approve' else 'rejected'}: "
+                      summary=f"{'Software head' if group == approvals.SOFTWARE else 'IT head'} "
+                              f"{'approved' if decision == 'approve' else 'rejected'}: "
                               f"{req.requested_by} -- {what}")
         req = approvals.decide(db, req, tok, decision, note, who)
         return jsonify(approvals.request_dict(req))

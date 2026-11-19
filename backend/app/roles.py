@@ -16,6 +16,10 @@ DISCARD_ROLES: frozenset[str] = WRITE_ROLES
 
 EDIT_ROLES: frozenset[str] = WRITE_ROLES | {VERIFIER}
 
+# Maker and checker: these profiles may also verify entries they made
+# themselves. Everyone else needs another verifier to check their entries.
+SELF_VERIFY_ROLES: frozenset[str] = frozenset({SUPERADMIN})
+
 BULK_CREATED_ROLE = ASSIGNEE
 
 ROLE_LABELS = {
@@ -49,6 +53,10 @@ def can_discard(role: str) -> bool:
 
 def can_edit(role: str) -> bool:
     return role in EDIT_ROLES
+
+
+def can_self_verify(role: str) -> bool:
+    return role in SELF_VERIFY_ROLES
 
 
 def role_change_error(current: str, requested: str) -> str | None:

@@ -5,6 +5,7 @@ import ActivityReport from '../components/ActivityReport';
 import Banner from '../components/Banner';
 import DateInput from '../components/DateInput';
 import ExportMenu from '../components/ExportMenu';
+import PageJump from '../components/PageJump';
 import SearchBox from '../components/SearchBox';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -311,9 +312,12 @@ const ActivityLogPage = () => {
             <button type="button" onClick={() => goToPage(page - 1)} disabled={page === 0 || loading}>
               Previous
             </button>
-            <span>
-              Page {(page + 1).toLocaleString('en-IN')} of {(lastPage + 1).toLocaleString('en-IN')}
-            </span>
+            <PageJump
+              page={page + 1}
+              total={lastPage + 1}
+              onGo={(n) => goToPage(n - 1)}
+              disabled={loading}
+            />
             <button type="button" onClick={() => goToPage(page + 1)} disabled={page >= lastPage || loading}>
               Next
             </button>

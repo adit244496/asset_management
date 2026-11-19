@@ -33,6 +33,24 @@ export function daysUntilExpiry(asset, now = new Date()) {
   return Math.round((end - startOfToday(now)) / DAY_MS);
 }
 
+// A software is Expired once its Renewal Date (warrantyEnd) has passed --
+// renewing on the day itself still counts as Active. No date: Active.
+export function licenceExpired(asset, now = new Date()) {
+  const days = daysUntilExpiry(asset, now);
+  return days !== null && days < 0;
+}
+
+// An expired software in the register cannot be edited by anyone (the
+// server refuses it too: crud.software_expired). Entries still waiting in
+// Verification can be corrected.
+export const EXPIRED_EDIT_NOTE = 'Expired — its Renewal Date has passed, so it cannot be edited';
+
+export function editLockedAsExpired(record, registerKey = record?.register) {
+  if (registerKey !== 'software' || !record) return false;
+  if (record.verification === 'pending' || record.verification === 'rejected') return false;
+  return licenceExpired(record);
+}
+
 export function warrantyState(asset, now = new Date()) {
   const days = daysUntilExpiry(asset, now);
   if (days === null) return WARRANTY_UNKNOWN;

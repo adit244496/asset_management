@@ -1,3 +1,4 @@
+import json
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
@@ -50,7 +51,7 @@ REQUIRED_ASSET_FIELDS = [
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
-DATE_FIELDS = ("dop", "warrantyEnd", "insuranceEnd", "assignedDate")
+DATE_FIELDS = ("dop", "warrantyEnd", "insuranceEnd", "assignedDate", "startDate")
 
 FIELD_LABELS = {
     "srl": "Srl No.",
@@ -78,14 +79,18 @@ FIELD_LABELS = {
     "availability": "Availability",
     "version": "Version",
     "quantity": "Quantity",
-    "price": "Price",
-    "vendor": "Vendor / Used By",
+    "price": "Price per License",
+    "vendor": "Vendor Name",
+    "startDate": "Start Date",
     "movedFrom": "Moved from",
+    "scrapLinkedPeripherals": "Also scrap the linked peripherals",
+    "scrapSharedPeripherals": "Also scrap shared peripherals (taken off their other assets)",
 }
 
 SOFTWARE_LABELS = {
     "assetId": "Software ID",
     "assetTag": "Software Name",
+    "status": "Usage",
     "srl": "Serial Number",
     "poNo": "PO Number",
     "warrantyEnd": "Renewal Date",
@@ -115,9 +120,9 @@ NOT_ON_PERIPHERALS = {"user", "email"}
 
 SOFTWARE_KEYS = [
     "assetTag", "version", "status", "srl", "quantity", "poNo",
-    "warrantyEnd", "price", "vendor", "comments",
+    "startDate", "warrantyEnd", "price", "vendor", "comments",
 ]
-SOFTWARE_ONLY_KEYS = ["version", "quantity", "price", "vendor"]
+SOFTWARE_ONLY_KEYS = ["version", "quantity", "price", "vendor", "startDate"]
 
 ALL_FIELD_KEYS = ASSET_KEYS + SOFTWARE_ONLY_KEYS
 
@@ -159,6 +164,7 @@ _KEY_TO_ATTR = {
     "quantity": "quantity",
     "price": "price",
     "vendor": "vendor",
+    "startDate": "start_date",
 }
 
 _ATTRS_BY_MODEL: dict[type, dict[str, str]] = {}
@@ -283,15 +289,16 @@ def srl_taken_message(holder, value: Any) -> str:
     if not is_verified(holder):
         tail = (f" That {reg.noun} is waiting in Verification -- verify, correct or "
                 "discard it there.")
-    if reg is registers.SOFTWARES:
-        return (
-            f"Serial Number '{str(value).strip()}' already belongs to {reg.noun} {who}. "
-            f"A licence serial identifies one licence, so it cannot be used twice.{tail}"
-        )
     return (
         f"Srl No. '{str(value).strip()}' already belongs to {reg.noun} {who}. "
         f"A serial number identifies one device, so it cannot be used twice.{tail}"
     )
+
+
+def serials_unique(register: Register) -> bool:
+    """Assets and peripherals: a serial identifies one device, never used twice.
+    Softwares: the same Serial Number (licence key) may be on several records."""
+    return register is not registers.SOFTWARES
 
 
 def duplicate_srl_error(
@@ -300,6 +307,8 @@ def duplicate_srl_error(
     if "srl" not in data or not normalize_srl(data.get("srl")):
         return None
     reg = registers.of(asset) if asset is not None else (register or ASSETS)
+    if not serials_unique(reg):
+        return None
     holder = find_item_by_srl(db, data["srl"], exclude_id=asset.id if asset is not None else None,
                               register=reg)
     return srl_taken_message(holder, data["srl"]) if holder is not None else None
@@ -312,6 +321,7 @@ ID_FORMATS = (("sapId", "sap_id", SAP_ID_RE, "exactly 12 digits"),
 
 
 SRL_RE = re.compile(r"^[A-Za-z0-9-]+$")
+SRL_RE_PERIPHERAL = re.compile(r"^[A-Za-z0-9 -]+$")  # peripherals: spaces allowed too
 
 
 def clean_srl(value: Any) -> Optional[str]:
@@ -325,7 +335,12 @@ def srl_format_error(data: dict[str, Any], register: Register = ASSETS, current:
     value = str(data["srl"]).strip()
     if current is not None and value.upper() == str(getattr(current, "srl", None) or "").strip().upper():
         return None
-    if not SRL_RE.match(value):
+    # A peripheral's serial may also contain spaces; assets and software may not.
+    if register is registers.PERIPHERALS:
+        if not SRL_RE_PERIPHERAL.match(value):
+            return (f"{field_label('srl', register)} may contain only letters, numbers, spaces "
+                    f"and hyphens (got {value!r})")
+    elif not SRL_RE.match(value):
         return (f"{field_label('srl', register)} may contain only letters, numbers and hyphens "
                 f"(got {value!r})")
     if "--" in value:
@@ -373,8 +388,15 @@ def validate_asset_fields(
             if not DATE_RE.match(str(data[field]).strip()):
                 errors.append(f"{field_label(field, register)} must be a valid date (dd-mm-yyyy)")
 
+    # Only assets are sold: a peripheral cannot be marked sold (a software's
+    # Usage is In Use or In Stock only). A record already sold may keep it.
+    if register is registers.PERIPHERALS and is_sold(data.get("status")) and not (
+            current is not None and is_sold(getattr(current, "status", None))):
+        errors.append(f"Only assets can be sold -- a {register.noun} cannot be marked "
+                      f"{str(data.get('status')).strip()}. Scrap it, or send it to stock.")
     if register is registers.SOFTWARES:
         errors.extend(software_format_errors(data))
+        errors.extend(software_rule_errors(data, current))
     else:
         problem = assigned_date_problem(data, effective_status, current, register)
         if problem:
@@ -421,6 +443,50 @@ def software_format_errors(data: dict[str, Any]) -> list[str]:
     return errors
 
 
+def licence_expired(item) -> bool:
+    """A software whose Renewal Date has passed (renewing on the day itself is
+    still Active) and that is not scrapped. Sent to the app as "expired": an
+    expired software shows no Usage anywhere."""
+    if registers.of(item) is not registers.SOFTWARES or getattr(item, "is_deleted", False):
+        return False
+    renews = str(getattr(item, "warranty_end", None) or "").strip()
+    return bool(DATE_RE.match(renews)) and renews < today_ist().isoformat()
+
+
+def software_expired(item) -> bool:
+    """An expired software in the register: it cannot be edited."""
+    return is_verified(item) and licence_expired(item)
+
+
+def expired_edit_error(item) -> str:
+    from app.datefmt import display_date
+    return (f"{item.asset_id} has expired -- its Renewal Date "
+            f"({display_date(item.warranty_end)}) has passed -- so it cannot be edited.")
+
+
+def software_rule_errors(data: dict[str, Any], current: Any = None) -> list[str]:
+    """A software's Usage is In Use or In Stock (a record keeping an older
+    value may still be saved), and its Start Date is not after its Renewal Date."""
+    errors: list[str] = []
+    usage = data.get("status")
+    if not _blank(usage):
+        kept = current is not None and str(usage).strip().lower() == str(
+            getattr(current, "status", None) or "").strip().lower()
+        if not (is_in_use(usage) or is_in_stock(usage) or kept
+                or str(usage).strip().upper() in RESERVED_STATUSES):
+            errors.append(f"{field_label('status', registers.SOFTWARES)} must be In Use or In Stock "
+                          f"(got {str(usage).strip()!r})")
+    if "startDate" in data or "warrantyEnd" in data:
+        def value(key, attr):
+            raw = data.get(key) if key in data else getattr(current, attr, None)
+            return str(raw or "").strip()
+        start, renews = value("startDate", "start_date"), value("warrantyEnd", "warranty_end")
+        if DATE_RE.match(start) and DATE_RE.match(renews) and start > renews:
+            errors.append(f"{field_label('startDate', registers.SOFTWARES)} cannot be after the "
+                          f"{field_label('warrantyEnd', registers.SOFTWARES)}")
+    return errors
+
+
 def sanitize_optional_formats(data: dict[str, Any], register: Register = ASSETS) -> list[str]:
     notes: list[str] = []
 
@@ -462,16 +528,29 @@ def parse_asset_id(value: Any, register: Register = ASSETS) -> Optional[int]:
     return int(match.group(1)) if match else None
 
 
-def next_asset_id(db: Session, register: Register = ASSETS, item=None) -> str:
+def type_use_error(db: Session, register: Register, data: dict[str, Any], current=None) -> Optional[str]:
+    """An asset type is offered on Assets only, a peripheral type on
+    Peripherals only (Master Data > Type, Assets / Peripherals). Refuses a type
+    meant for the other register -- unless the record already has it."""
+    if register not in registers.HARDWARE or "type" not in (data or {}):
+        return None
+    from app import type_codes
+    return type_codes.use_problem(type_codes.type_uses(db), register, data.get("type"),
+                                  getattr(current, "type", None) if current is not None else None)
+
+
+def next_asset_id(db: Session, register: Register = ASSETS, item=None,
+                  type_codes_chosen: Optional[dict[str, str]] = None) -> str:
     """The ID for a new record. Assets and peripherals: the type's
     abbreviation and its running number (LAP_00001 -- app/type_codes.py).
-    Softwares: SFT000001 as before."""
+    Softwares: SFT000001 as before. `type_codes_chosen`: abbreviations picked
+    on a bulk import for types not in Master Data yet."""
     if register in registers.HARDWARE:
         from app import type_codes
         type_name = getattr(item, "type", None) if item is not None else None
         if not str(type_name or "").strip():
             raise ValueError("An asset or peripheral needs its type before it can be numbered.")
-        return type_codes.next_id(db, type_name)
+        return type_codes.next_id(db, type_name, register.key, type_codes_chosen)
 
     row = db.execute(
         select(Counter).where(Counter.name == register.counter).with_for_update()
@@ -1195,15 +1274,23 @@ def list_history_by_asset(
 def history_row_to_dict(
     event: AssetEvent, asset, changes: int
 ) -> dict[str, Any]:
+    # A permanently deleted record: what it was, from its deletion entry.
+    gone: dict[str, Any] = {}
+    if asset is None and event.action == EVENT_PURGED and event.new_value:
+        try:
+            gone = json.loads(event.new_value)
+        except (TypeError, ValueError):
+            gone = {}
     return {
         "assetPk": event.asset_pk,
         "assetId": asset.asset_id if asset else event.asset_number,
         "recordedAssetId": event.asset_number,
-        "assetTag": asset.asset_tag if asset else None,
-        "type": asset.type if asset else None,
-        "model": asset.model if asset else None,
+        "assetTag": asset.asset_tag if asset else gone.get("assetTag"),
+        "type": asset.type if asset else gone.get("type"),
+        "model": asset.model if asset else gone.get("model"),
         "status": asset.status if asset else None,
-        "isDeleted": bool(asset.is_deleted) if asset else False,
+        "isDeleted": bool(asset.is_deleted) if asset else event.action == EVENT_PURGED,
+        "expired": licence_expired(asset) if asset else False,
         "assetExists": asset is not None,
         "changes": changes,
         "lastAction": event.action,
@@ -1225,13 +1312,16 @@ def list_event_actors(db: Session, register: Register = ASSETS) -> list[str]:
 
 
 def event_to_dict(event: AssetEvent) -> dict[str, Any]:
+    # A permanent deletion keeps the record's details (deleted_snapshot) on
+    # its entry; they are shown in the page header, not as a "new value".
+    new_value = None if event.action == EVENT_PURGED else event.new_value
     return {
         "id": event.id,
         "assetId": event.asset_number,
         "action": event.action,
         "field": event.field,
         "oldValue": secret_serials.shown_event_value(event.register, event.field, event.old_value),
-        "newValue": secret_serials.shown_event_value(event.register, event.field, event.new_value),
+        "newValue": secret_serials.shown_event_value(event.register, event.field, new_value),
         "actor": event.actor,
         "at": event.at.isoformat() if event.at else None,
     }
@@ -1342,23 +1432,13 @@ def count_unverified(db: Session) -> dict[str, int]:
     return out
 
 
-def has_sap_id(item) -> bool:
-    return bool(str(getattr(item, "sap_id", None) or "").strip())
-
-
 def starting_verification(item) -> str:
-    if not settings.VERIFY_NEW_RECORDS or has_sap_id(item):
+    """Every new record waits in Verification -- a SAP ID or serial number
+    does not let it skip (records "verified by SAP ID" before this keep
+    their history)."""
+    if not settings.VERIFY_NEW_RECORDS:
         return VERIFIED
     return PENDING
-
-
-def accept_by_sap_id(db: Session, item, username: str, was: str = PENDING) -> None:
-    item.verification = VERIFIED
-    item.verified_by = None
-    item.verified_at = _utcnow()
-    item.verification_note = None
-    record_event(db, item, EVENT_VERIFIED, username,
-                 field="sapId", old_value=was, new_value=item.sap_id)
 
 
 def create_asset(db: Session, data: dict[str, Any], username: str, register: Register = ASSETS):
@@ -1368,163 +1448,179 @@ def create_asset(db: Session, data: dict[str, Any], username: str, register: Reg
     asset.asset_id = next_asset_id(db, register, asset)
     asset.created_by = username
     asset.updated_by = username
-    by_sap_id = settings.VERIFY_NEW_RECORDS and has_sap_id(asset)
     asset.verification = starting_verification(asset)
     db.add(asset)
     db.flush()
     record_event(db, asset, EVENT_CREATED, username)
-    if by_sap_id:
-        accept_by_sap_id(db, asset, username)
     sync_masters_from_values(db, data, register)
     db.commit()
     db.refresh(asset)
     return asset
 
 
-def update_asset(db: Session, asset, data: dict[str, Any], username: str):
+def update_asset(db: Session, asset, data: dict[str, Any], username: str,
+                 scrap_linked: bool = False, scrap_shared: bool = False):
+    """Save changes to a record. An asset that becomes sold lets go of its
+    linked peripherals as scrapping does: they go to stock -- or, with
+    scrap_linked (and scrap_shared for shared ones), are scrapped. What
+    happened is left on asset.sale_released for the caller."""
     before = _history_snapshot(asset)
+    status_before = asset.status
     if handing_over_from_stock(asset, data):
         data = {**data, "status": in_use_status(db)}
     register = registers.of(asset)
     canonicalise_master_values(data, master_value_index(db), register)
     _apply_asset_fields(asset, data)
     asset.updated_by = username
-    was = asset.verification
     if asset.verification == REJECTED:
         asset.verification = PENDING
     record_field_changes(db, asset, before, username)
-    if was in (PENDING, REJECTED) and has_sap_id(asset):
-        accept_by_sap_id(db, asset, username, was=was)
+    released = None
+    if (register is ASSETS and not asset.is_deleted
+            and is_sold(asset.status) and not is_sold(status_before)):
+        released = _unlink_on_scrap(db, asset, username, scrap_linked=scrap_linked,
+                                    scrap_shared=scrap_shared)
     sync_masters_from_values(db, data, register)
     db.commit()
     db.refresh(asset)
+    if released is not None:
+        asset.sale_released = {"toStock": [p.asset_id for p in released["toStock"]],
+                               "scrapped": [p.asset_id for p in released["scrapped"]],
+                               "unlinked": [r.asset_id for r in released["unlinked"]],
+                               "offOthers": [a.asset_id for a in released["offOthers"]]}
     return asset
 
 
-MOVE_ASSIGN = "assign"
-MOVE_STOCK = "stock"
-MOVE_ACTIONS = (MOVE_ASSIGN, MOVE_STOCK)
-
-
 def in_stock_status(db: Session) -> str:
+    """The status list's In Stock value, as spelled there."""
     for row in list_master(db, MASTERS["status"]):
         if row.is_active and is_in_stock(row.name):
             return row.name
     return "IN STOCK"
 
 
-def software_move_error(item, action: str, quantity: Any) -> Optional[str]:
-    if action not in MOVE_ACTIONS:
-        return 'action must be "assign" or "stock"'
-    if item.is_deleted:
-        return f"{item.asset_id} is scrapped, so it cannot be moved. Restore it first."
-    if is_sold(item.status):
-        return f"{item.asset_id} was sold, so it cannot be moved."
-    if action == MOVE_ASSIGN and not is_in_stock(item.status):
-        return f"{item.asset_id} is not in stock, so there is nothing to assign from it."
-    if action == MOVE_STOCK and is_in_stock(item.status):
-        return f"{item.asset_id} is already in stock."
-    try:
-        n = int(str(quantity).strip())
-    except (TypeError, ValueError):
-        return "Quantity must be a whole number."
-    total = item.quantity or 1
-    if n < 1 or n > total:
-        return f"Quantity must be between 1 and {total}: that is how many {item.asset_id} holds."
-    return None
+def _mark_scrapped(db: Session, item, username: Optional[str]) -> None:
+    was = item.status
+    item.is_deleted = True
+    item.previous_status = was
+    item.status = SCRAP_STATUS
+    item.availability = derive_availability(item.status, True)
+    if username:
+        item.updated_by = username
+    record_event(db, item, EVENT_DELETED, username,
+                 field="status", old_value=was, new_value=SCRAP_STATUS)
 
 
-def _money(d) -> str:
-    from decimal import Decimal
-    text = format(Decimal(d).quantize(Decimal("0.01")), "f")
-    return text[:-3] if text.endswith(".00") else text
+def _take_off_all_assets(db: Session, peripheral, username: Optional[str]) -> list:
+    """Take a peripheral off every asset it is still on (before scrapping it)."""
+    on = list(db.execute(
+        select(Asset).join(PeripheralLink, PeripheralLink.asset_id == Asset.id)
+        .where(PeripheralLink.peripheral_id == peripheral.id).order_by(Asset.asset_id)
+    ).scalars().all())
+    if not on:
+        return []
+    db.query(PeripheralLink).filter(
+        PeripheralLink.peripheral_id == peripheral.id
+    ).delete(synchronize_session=False)
+    for asset in on:
+        record_event(db, asset, EVENT_UPDATED, username, field="linkedPeripherals",
+                     old_value=peripheral_label(peripheral),
+                     new_value=f"removed ({peripheral.asset_id} scrapped)")
+    record_event(db, peripheral, EVENT_UPDATED, username, field="linkedAsset",
+                 old_value=", ".join(a.asset_id or "" for a in on), new_value=None)
+    return on
 
 
-def _split_price(price: Optional[str], part: int, total: int) -> tuple[Optional[str], Optional[str]]:
-    from decimal import ROUND_HALF_UP, Decimal
-    if not price:
-        return None, None
-    whole = Decimal(price)
-    moved = (whole * part / total).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-    return _money(moved), _money(whole - moved)
+def _unlink_on_scrap(db: Session, item, username: Optional[str],
+                     scrap_linked: bool = False, scrap_shared: bool = False,
+                     note: Optional[str] = None) -> dict[str, list]:
+    """Scrapping breaks the record's peripheral links.
+
+    * An asset scrapped: each peripheral on it is unlinked and -- unless it is
+      still on another asset (a shared printer) -- sent to stock, or, when
+      scrap_linked is asked for, scrapped together with the asset.
+    * A peripheral scrapped: it is unlinked from the asset(s) it was on.
+    With scrap_shared as well, a shared peripheral still on other assets is
+    scrapped too, and taken off all of them.
+    Both sides' history record it.
+    Returns {"toStock": [...], "scrapped": [...], "unlinked": [...], "offOthers": [...]}.
+    """
+    reg = registers.of(item)
+    out: dict[str, list] = {"toStock": [], "scrapped": [], "unlinked": [], "offOthers": []}
+    if reg is ASSETS:
+        stock = None
+        for peripheral in linked_peripherals(db, item.id):
+            db.query(PeripheralLink).filter(
+                PeripheralLink.asset_id == item.id, PeripheralLink.peripheral_id == peripheral.id,
+            ).delete(synchronize_session=False)
+            record_event(db, peripheral, EVENT_UPDATED, username, field="linkedAsset",
+                         old_value=item.asset_id, new_value=note)  # note: e.g. "removed (… deleted permanently)"
+            out["unlinked"].append(peripheral)
+            if peripheral.is_deleted:
+                continue  # scrapped itself already
+            if linked_assets(db, peripheral.id):
+                # Still plugged into another asset (shared): it only comes off this
+                # one -- unless asked to scrap shared ones too, off all of them.
+                if not (scrap_linked and scrap_shared) or is_sold(peripheral.status):
+                    continue
+                out["offOthers"] += [a for a in _take_off_all_assets(db, peripheral, username)
+                                     if a not in out["offOthers"]]
+            if scrap_linked and not is_sold(peripheral.status):
+                _mark_scrapped(db, peripheral, username)
+                out["scrapped"].append(peripheral)
+                continue
+            stock = stock or in_stock_status(db)
+            if not is_in_stock(peripheral.status) and not is_sold(peripheral.status):
+                record_event(db, peripheral, EVENT_UPDATED, username, field="status",
+                             old_value=peripheral.status, new_value=stock)
+                peripheral.status = stock
+                peripheral.availability = derive_availability(stock, False)
+                out["toStock"].append(peripheral)
+            if peripheral.assigned_date:
+                record_event(db, peripheral, EVENT_UPDATED, username, field="assignedDate",
+                             old_value=peripheral.assigned_date, new_value=None)
+                peripheral.assigned_date = None
+            if username:
+                peripheral.updated_by = username
+        if out["unlinked"]:
+            record_event(db, item, EVENT_UPDATED, username, field="linkedPeripherals",
+                         old_value=", ".join(peripheral_label(p) for p in out["unlinked"]),
+                         new_value=None)
+    elif reg is registers.PERIPHERALS:
+        on = list(db.execute(
+            select(Asset).join(PeripheralLink, PeripheralLink.asset_id == Asset.id)
+            .where(PeripheralLink.peripheral_id == item.id).order_by(Asset.asset_id)
+        ).scalars().all())
+        if on:
+            db.query(PeripheralLink).filter(
+                PeripheralLink.peripheral_id == item.id
+            ).delete(synchronize_session=False)
+            for asset in on:
+                record_event(db, asset, EVENT_UPDATED, username, field="linkedPeripherals",
+                             old_value=peripheral_label(item), new_value=f"removed ({item.asset_id} scrapped)")
+                out["unlinked"].append(asset)
+            record_event(db, item, EVENT_UPDATED, username, field="linkedAsset",
+                         old_value=", ".join(a.asset_id or "" for a in on), new_value=None)
+    return out
 
 
-def move_software(db: Session, item, action: str, quantity: int, holder: Optional[str],
-                  username: str) -> dict[str, Any]:
-    register = registers.SOFTWARES
-    total = item.quantity or 1
-    target_status = in_use_status(db) if action == MOVE_ASSIGN else in_stock_status(db)
-    target_vendor = (holder or "").strip() if action == MOVE_ASSIGN else ""
-
-    def write(rec, data):
-        before = _history_snapshot(rec)
-        _apply_asset_fields(rec, data)
-        rec.updated_by = username
-        record_field_changes(db, rec, before, username)
-
-    if quantity >= total:
-        write(item, {"status": target_status, "vendor": target_vendor})
-        db.commit()
-        db.refresh(item)
-        return {"record": item, "source": item, "split": False, "merged": False}
-
-    moved_price, kept_price = _split_price(item.price, quantity, total)
-    model = register.model
-    same = lambda col, v: func.lower(func.coalesce(col, "")) == (v or "").strip().lower()  # noqa: E731
-    match = db.execute(
-        select(model).where(
-            model.id != item.id, model.is_deleted.is_(False), model.verification == VERIFIED,
-            same(model.asset_tag, item.asset_tag), same(model.version, item.version),
-            same(model.status, target_status), same(model.vendor, target_vendor),
-        ).order_by(model.asset_id)
-    ).scalars().first()
-
-    if match is not None:
-        add = None
-        if moved_price is not None or match.price:
-            from decimal import Decimal
-            add = _money(Decimal(match.price or "0") + Decimal(moved_price or "0"))
-        write(match, {"quantity": (match.quantity or 0) + quantity,
-                      **({"price": add} if add is not None else {})})
-        dest, merged = match, True
-    else:
-        dest = model()
-        _apply_asset_fields(dest, {
-            "assetTag": item.asset_tag, "version": item.version, "status": target_status,
-            "quantity": quantity, "poNo": item.po_no, "warrantyEnd": item.warranty_end,
-            "price": moved_price, "vendor": target_vendor, "comments": item.comments,
-        })
-        dest.asset_id = next_asset_id(db, register)
-        dest.created_by = username
-        dest.updated_by = username
-        dest.verification = VERIFIED
-        db.add(dest)
-        db.flush()
-        record_event(db, dest, EVENT_CREATED, username, field="movedFrom",
-                     old_value=item.asset_id, new_value=f"{quantity} of {total}")
-        merged = False
-
-    write(item, {"quantity": total - quantity,
-                 **({"price": kept_price} if kept_price is not None else {})})
-    db.commit()
-    db.refresh(dest)
-    db.refresh(item)
-    return {"record": dest, "source": item, "split": True, "merged": merged}
-
-
-def delete_asset(db: Session, asset, username: Optional[str] = None):
+def delete_asset(db: Session, asset, username: Optional[str] = None, scrap_linked: bool = False,
+                 scrap_shared: bool = False):
+    """Scrap a record. An asset's linked peripherals go to stock -- or, with
+    scrap_linked, are scrapped with it. A shared one still on another asset
+    only comes off this one, unless scrap_shared: then it is scrapped too and
+    taken off every asset it was on."""
     if not asset.is_deleted:
-        was = asset.status
-        asset.is_deleted = True
-        asset.previous_status = was
-        asset.status = SCRAP_STATUS
-        asset.availability = derive_availability(asset.status, True)
-        if username:
-            asset.updated_by = username
-        record_event(db, asset, EVENT_DELETED, username,
-                     field="status", old_value=was, new_value=SCRAP_STATUS)
+        _mark_scrapped(db, asset, username)
+        released = _unlink_on_scrap(db, asset, username, scrap_linked=scrap_linked,
+                                    scrap_shared=scrap_shared)
         db.commit()
         db.refresh(asset)
+        # Read by the callers to say what happened to the linked records.
+        asset.scrap_released = {"toStock": [p.asset_id for p in released["toStock"]],
+                                "scrapped": [p.asset_id for p in released["scrapped"]],
+                                "unlinked": [r.asset_id for r in released["unlinked"]],
+                                "offOthers": [a.asset_id for a in released["offOthers"]]}
     return asset
 
 
@@ -1560,19 +1656,84 @@ def restore_asset(
     return asset
 
 
+# What a permanently deleted record was, kept on its "purged" history entry so
+# its History page can still say what it was after the record itself is gone.
+DELETED_SNAPSHOT_KEYS = ("assetTag", "type", "model", "make", "srl", "status", "previousStatus",
+                         "location", "site", "floor", "user", "version", "vendor", "warrantyEnd")
+
+
+def deleted_snapshot(item) -> dict[str, Any]:
+    out = {}
+    for key in DELETED_SNAPSHOT_KEYS:
+        attr = _KEY_TO_ATTR.get(key)
+        if attr and hasattr(item, attr):
+            value = secret_serials.shown(item) if key == "srl" else getattr(item, attr)
+            if value not in (None, ""):
+                out[key] = str(value)
+    return out
+
+
 def purge_asset(db: Session, asset, username: Optional[str] = None) -> str:
+    """Delete a record for good (its history is kept). An asset's linked
+    peripherals go to stock, as on scrapping or selling -- a shared one still on
+    another asset only comes off this one. Left on asset.purge_released."""
     was = asset.asset_id
-    on_it = linked_peripherals(db, asset.id) if registers.of(asset) is ASSETS else []
+    reg = registers.of(asset)
+    released = {"toStock": [], "unlinked": []}
+    if reg is ASSETS:
+        out = _unlink_on_scrap(db, asset, username, note=f"removed ({was} deleted permanently)")
+        released = {"toStock": [p.asset_id for p in out["toStock"]],
+                    "unlinked": [p.asset_id for p in out["unlinked"]]}
+    elif reg is registers.PERIPHERALS:
+        # The asset(s) it was on: say so on their history too.
+        for other in db.execute(select(Asset).join(PeripheralLink, PeripheralLink.asset_id == Asset.id)
+                                .where(PeripheralLink.peripheral_id == asset.id)).scalars().all():
+            record_event(db, other, EVENT_UPDATED, username, field="linkedPeripherals",
+                         old_value=peripheral_label(asset),
+                         new_value=f"removed ({was} deleted permanently)")
+            released["unlinked"].append(other.asset_id)
     db.query(PeripheralLink).filter(
         (PeripheralLink.asset_id == asset.id) | (PeripheralLink.peripheral_id == asset.id)
     ).delete(synchronize_session=False)
-    _release_unlinked(db, on_it)
 
     record_event(db, asset, EVENT_PURGED, username,
-                 field="assetId", old_value=was, new_value=None)
+                 field="assetId", old_value=was,
+                 new_value=json.dumps(deleted_snapshot(asset), default=str))
     db.delete(asset)
     db.commit()
+    asset.purge_released = released
     return was
+
+
+def deleted_record_view(db: Session, asset_pk: str, register: Register = ASSETS) -> Optional[dict[str, Any]]:
+    """A permanently deleted record, as far as its kept history tells: the
+    details saved when it was deleted (or, for one deleted before those were
+    saved, the last values its history recorded). None if it has no history."""
+    events = list_asset_events(db, asset_pk, register=register)
+    if not events:
+        return None
+    view: dict[str, Any] = {}
+    for e in reversed(events):  # oldest first: later values win
+        if e.action == EVENT_UPDATED and e.field in DELETED_SNAPSHOT_KEYS and e.new_value not in (None, ""):
+            view[e.field] = secret_serials.shown_event_value(e.register, e.field, e.new_value)
+    purged = next((e for e in events if e.action == EVENT_PURGED), None)
+    if purged is not None and purged.new_value:
+        try:
+            view.update(json.loads(purged.new_value))
+        except (TypeError, ValueError):
+            pass
+    number = next((e.asset_number for e in events if e.asset_number), None)
+    return {
+        **view,
+        "id": asset_pk,
+        "assetId": number,
+        "register": register.key,
+        "isDeleted": True,
+        "isPurged": purged is not None,
+        "deletedAt": purged.at.isoformat() if purged is not None and purged.at else None,
+        "deletedBy": purged.actor if purged is not None else None,
+        "srlMasked": register is registers.SOFTWARES,
+    }
 
 
 def _release_unlinked(db: Session, peripherals: list) -> None:
@@ -1889,6 +2050,7 @@ def update_assets(
     in_use = None
     for asset in assets:
         before = _history_snapshot(asset)
+        status_before = asset.status
         if handing_over_from_stock(asset, changes):
             in_use = in_use or in_use_status(db)
             _apply_asset_fields(asset, {**changes, "status": in_use})
@@ -1897,6 +2059,10 @@ def update_assets(
         if record_field_changes(db, asset, before, username):
             asset.updated_by = username
             changed += 1
+        # Sold in bulk: the asset's linked peripherals go to stock (as on scrapping).
+        if (register is ASSETS and not asset.is_deleted
+                and is_sold(asset.status) and not is_sold(status_before)):
+            _unlink_on_scrap(db, asset, username)
     sync_masters_from_values(db, changes, register)
     db.commit()
     return changed
@@ -1969,7 +2135,7 @@ def _dedupe_value(row: dict[str, Any], dedupe_key: str) -> Optional[str]:
 def bulk_import_assets(
     db: Session, rows: list[dict[str, Any]], dedupe_key: Optional[str], username: str,
     register: Register = ASSETS, unknown_masters: str = UNKNOWN_INCLUDE,
-    accepted_out: Optional[list] = None,
+    accepted_out: Optional[list] = None, type_codes_chosen: Optional[dict[str, str]] = None,
 ) -> tuple[
     int, int, list[dict[str, Any]], list[dict[str, Any]],
     dict[str, list[str]], dict[str, list[dict[str, str]]],
@@ -2003,6 +2169,8 @@ def bulk_import_assets(
     srl_from_row: dict[str, int] = {}
 
     known_masters = master_value_index(db)
+    from app import type_codes
+    type_uses = type_codes.type_uses(db)
     unknown = unknown_master_values(
         [r for r in rows if isinstance(r, dict)], known_masters, register,
     )
@@ -2035,6 +2203,9 @@ def bulk_import_assets(
         reserved = reserved_status_error(row.get("status"))
         if reserved:
             row_errors = [*row_errors, reserved]
+        wrong_type = type_codes.use_problem(type_uses, register, row.get("type"))
+        if wrong_type:
+            row_errors = [*row_errors, wrong_type]
         if row_errors:
             skipped += 1
             errors.append({"row": index, "reason": "; ".join(row_errors)})
@@ -2079,7 +2250,7 @@ def bulk_import_assets(
                     continue
                 seen_keys.add(key_value)
 
-        srl_key = normalize_srl(row.get("srl"))
+        srl_key = normalize_srl(row.get("srl")) if serials_unique(register) else None
         if srl_key:
             if srl_key in srl_from_row:
                 skipped += 1
@@ -2087,9 +2258,7 @@ def bulk_import_assets(
                     "row": index,
                     "reason": (f"{field_label('srl', register)} '{str(row.get('srl')).strip()}' "
                                f"is already used by row {srl_from_row[srl_key] + 1} of this file. "
-                               f"A serial number identifies one "
-                               f"{'licence' if register is registers.SOFTWARES else 'device'}, "
-                               f"so it cannot be used twice."),
+                               f"A serial number identifies one device, so it cannot be used twice."),
                 })
                 continue
             holder = srl_holders.get(srl_key)
@@ -2100,7 +2269,7 @@ def bulk_import_assets(
 
         asset = register.model()
         _apply_asset_fields(asset, row)
-        asset.asset_id = next_asset_id(db, register, asset)
+        asset.asset_id = next_asset_id(db, register, asset, type_codes_chosen)
         if duplicates is not None:
             duplicates.add(row, asset.asset_id)
         if srl_key:
@@ -2122,8 +2291,6 @@ def bulk_import_assets(
         db.flush()
         for asset in accepted:
             record_event(db, asset, EVENT_IMPORTED, username)
-            if settings.VERIFY_NEW_RECORDS and has_sap_id(asset):
-                accept_by_sap_id(db, asset, username)
 
     db.commit()
     if accepted_out is not None:
@@ -2212,6 +2379,7 @@ def create_master(
     sort_order: Optional[int] = None,
     is_active: bool = True,
     code: Optional[str] = None,
+    used_for: Optional[str] = None,
 ) -> Any:
     row = spec.new_row(
         name=name.strip(),
@@ -2221,6 +2389,8 @@ def create_master(
     )
     if code and isinstance(row, AssetType):
         row.code = code  # checked by the caller; blank -> filled in on flush
+    if used_for and isinstance(row, AssetType):
+        row.used_for = used_for  # checked by the caller; blank -> from its name on flush
     db.add(row)
     db.commit()
     db.refresh(row)
@@ -2232,7 +2402,7 @@ MASTER_DESCRIPTION_MAX = 255
 
 
 def bulk_create_masters(
-    db: Session, spec: MasterSpec, items: list[dict[str, Any]]
+    db: Session, spec: MasterSpec, items: list[dict[str, Any]], used_for: Optional[str] = None,
 ) -> tuple[int, int, list[dict[str, Any]], list[Any]]:
     added = 0
     skipped = 0
@@ -2280,6 +2450,8 @@ def bulk_create_masters(
             sort_order=next_order,
             is_active=True,
         )
+        if used_for and isinstance(row, AssetType):
+            row.used_for = used_for  # the sub-list (Assets / Peripherals) they were added under
         next_order += 1
         db.add(row)
         created.append(row)
@@ -2302,10 +2474,13 @@ def update_master(
     is_active: Optional[bool] = None,
     is_shared: Optional[bool] = None,
     code: Optional[str] = None,
+    used_for: Optional[str] = None,
 ) -> tuple[Any, int]:
     renamed = 0
     if code and isinstance(row, AssetType):
         row.code = code  # checked by the caller; existing IDs keep the old one
+    if used_for and isinstance(row, AssetType):
+        row.used_for = used_for  # records already of this type keep it
     if name is not None:
         clean = name.strip()
         if clean and clean != row.name:
@@ -2430,6 +2605,8 @@ def sync_masters_from_rows(
             extra = {}
             if spec.model is AssetType and value.lower() in shared_seeds:
                 extra["is_shared"] = True
+            if spec.model is AssetType and register in registers.HARDWARE:
+                extra["used_for"] = register.key  # a new type: for the register it came in on
             db.add(spec.new_row(name=value, description=None, sort_order=next_order,
                                 is_active=True, **extra))
             next_order += 1
@@ -2488,6 +2665,7 @@ def master_to_dict(row: Any, category: str) -> dict[str, Any]:
     if isinstance(row, AssetType):
         d["isShared"] = bool(row.is_shared)
         d["code"] = row.code
+        d["usedFor"] = row.used_for or "both"
     if isinstance(row, Make):
         d["classification"] = row.classification
     return d
@@ -2565,12 +2743,20 @@ def import_masters(db: Session, lists: dict[str, Any]) -> dict[str, Any]:
             except (TypeError, ValueError):
                 order = None
             shared = _yes_no(item.get("isShared")) if spec.model is AssetType else None
+            used_for = None
+            if spec.model is AssetType and str(item.get("usedFor") or "").strip():
+                from app import type_codes
+                used_for = type_codes.clean_use(item.get("usedFor"))
+                if used_for is None:
+                    skip(index, f'"Used for" of "{name}" must be Assets, Peripherals or Both')
+                    continue
             if spec.key == "status" and lowered == SCRAP_STATUS.lower():
                 active = False
 
             row = existing.get(lowered)
             if row is None:
-                extra = {"is_shared": bool(shared)} if spec.model is AssetType else {}
+                extra = ({"is_shared": bool(shared), "used_for": used_for}
+                         if spec.model is AssetType else {})
                 db.add(spec.new_row(
                     name=name, description=description or None,
                     sort_order=next_order if order is None else order,
@@ -2582,15 +2768,19 @@ def import_masters(db: Session, lists: dict[str, Any]) -> dict[str, Any]:
                 continue
 
             before = (row.description, row.is_active, row.sort_order,
-                      getattr(row, "is_shared", None))
-            row.description = description or None
+                      getattr(row, "is_shared", None), getattr(row, "used_for", None))
             row.is_active = active
-            if order is not None:
-                row.sort_order = order
-            if shared is not None and spec.model is AssetType:
-                row.is_shared = shared
+            if spec.model is AssetType:
+                # A Type is fixed once added (description, order and sub-list
+                # included): only Active and Shared are taken from the sheet.
+                if shared is not None:
+                    row.is_shared = shared
+            else:
+                row.description = description or None
+                if order is not None:
+                    row.sort_order = order
             after = (row.description, row.is_active, row.sort_order,
-                     getattr(row, "is_shared", None))
+                     getattr(row, "is_shared", None), getattr(row, "used_for", None))
             counts["updated" if after != before else "unchanged"] += 1
         report["lists"][spec.key] = counts
 
@@ -3200,6 +3390,7 @@ def update_user(
     email: Optional[str] = None,
     location: Optional[str] = None,
     date_of_joining: Optional[str] = None,
+    must_change_password: Optional[bool] = None,
 ) -> User:
     if full_name is not None:
         user.full_name = full_name
@@ -3215,6 +3406,9 @@ def update_user(
         user.date_of_joining = date_of_joining.strip() or None
     if password:
         user.password_hash = get_password_hash(password)
+        if must_change_password is not None:
+            # Reset by an admin: the person sets their own at next sign-in.
+            user.must_change_password = bool(must_change_password)
     db.commit()
     db.refresh(user)
     return user
@@ -3267,6 +3461,8 @@ def asset_to_dict(asset, links=None, linked_to=None, shared=None,  # noqa: C901
     d["createdBy"] = asset.created_by
     d["updatedBy"] = asset.updated_by
     d["isDeleted"] = bool(asset.is_deleted)
+    # Software past its Renewal Date: the app shows it as Expired, with no Usage.
+    d["expired"] = licence_expired(asset)
     d["verification"] = asset.verification or VERIFIED
     d["verifiedBy"] = asset.verified_by
     d["verifiedAt"] = asset.verified_at.isoformat() if asset.verified_at else None

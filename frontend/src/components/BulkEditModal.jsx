@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react';
 import { Layers, X } from 'lucide-react';
 import { errorMessage } from '../api';
 import { useAssets } from '../context/AssetsContext';
+import { usageOptions } from '../lib/inventory';
+import { PERIPHERAL, SOFTWARE, labelFor } from '../lib/registers';
 import { byKey } from '../lib/schema';
 import DateInput from './DateInput';
 import './BulkEditModal.css';
@@ -14,12 +16,14 @@ const BULK_KEYS = [
 ];
 
 const BulkEditModal = ({ ids, onClose, onDone }) => {
-  const { updateAssets, formOptionsFor } = useAssets();
+  const { updateAssets, formOptionsFor, register } = useAssets();
+  const software = register === SOFTWARE;
   const [values, setValues] = useState({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const columns = useMemo(() => BULK_KEYS.map(byKey).filter(Boolean), []);
+  const columns = useMemo(() => BULK_KEYS.map(byKey).filter(Boolean)
+    .map((col) => ({ ...col, label: labelFor(col.key, col.label, register) })), [register]);
 
   const changes = useMemo(() => {
     const out = {};
@@ -56,7 +60,11 @@ const BulkEditModal = ({ ids, onClose, onDone }) => {
         <select id={id} className="field-input" value={value}
           onChange={(e) => onChange(e.target.value)}>
           <option value="">Leave unchanged</option>
-          {formOptionsFor(col.key, value).map((v) => <option key={v} value={v}>{v}</option>)}
+          {(software && col.key === 'status'
+            ? usageOptions(formOptionsFor('status'))  // a software's Usage: In Use or In Stock
+            : register === PERIPHERAL && col.key === 'status'
+              ? formOptionsFor('status').filter((v) => !/sold/i.test(v))  // only assets are sold
+              : formOptionsFor(col.key, value)).map((v) => <option key={v} value={v}>{v}</option>)}
         </select>
       );
     }

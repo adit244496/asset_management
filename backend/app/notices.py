@@ -57,18 +57,31 @@ def _place(snap: dict) -> str:
 
 
 def _deliver(flag: str, subject: str, text: str, body: str, people: Iterable[Any],
-             logged: str, target: str) -> None:
-    from app.approvals import _log, _session, _wrap, get_settings, recipients
+             logged: str, target: str, group: str = "hardware") -> None:
+    """Email a notice to one recipient group (Assets & Peripherals, or Software)."""
+    from app.approvals import GROUP_LABELS, _log, _session, _wrap, get_settings, it_heads, recipients
     with _session() as db:
         cfg = get_settings(db)
-        if not getattr(cfg, flag) or not cfg.it_head_email or not mailer.configured(cfg):
+        if not getattr(cfg, flag) or not it_heads(cfg, group) or not mailer.configured(cfg):
             return
-        to, cc = recipients(cfg, *people)
+        to, cc = recipients(cfg, *people, group=group)
+        who = GROUP_LABELS.get(group, group)
         try:
             mailer.send(cfg, to, subject, text, _wrap(body), cc=cc)
-            _log(db, f"Emailed the IT head: {logged}", target[:200])
+            _log(db, f"Emailed the {who} group: {logged}", target[:200])
         except mailer.MailError as exc:
-            _log(db, f"Could not email the IT head that {logged}: {exc}", target[:200], ok=False)
+            _log(db, f"Could not email the {who} group that {logged}: {exc}", target[:200], ok=False)
+
+
+def _by_group(items: list) -> list[tuple[str, list]]:
+    """[(group, items)] -- assets and peripherals together, softwares apart."""
+    from app.approvals import GROUPS, group_of
+    out = []
+    for group in GROUPS:
+        mine = [i for i in items if group_of(registers.of(i)) == group]
+        if mine:
+            out.append((group, mine))
+    return out
 
 
 def transferred(db: Session, item, was: dict, actor: str, onto=None) -> bool:
@@ -112,7 +125,6 @@ HOW = {
     "entered": "added from Data Entry",
     "uploaded": "uploaded",
     "verified": "accepted from Verification",
-    "sap_id": "given a SAP ID, so accepted without verification",
 }
 
 
@@ -173,8 +185,10 @@ def registered(db: Session, items: list, actor: str, how: str) -> bool:
         db.commit()
         return True
 
-    subject, text, body, logged, ids = _registration_mail(items, actor, HOW.get(how, how))
-    mailer.run_in_background(_deliver, "registration_enabled", subject, text, body, [], logged, ids)
+    for group, mine in _by_group(items):
+        subject, text, body, logged, ids = _registration_mail(mine, actor, HOW.get(how, how))
+        mailer.run_in_background(_deliver, "registration_enabled", subject, text, body, [], logged, ids,
+                                 group)
     return True
 
 
@@ -226,8 +240,9 @@ def send_registration_digest(now: Optional[datetime] = None) -> int:
         sent = 0
         if items and _settings(db).registration_enabled:
             who = actors[0] if len(actors) == 1 else ", ".join(actors[:-1]) + " and " + actors[-1]
-            subject, text, body, logged, ids = _registration_mail(items, who, HOW["verified"])
-            _deliver("registration_enabled", subject, text, body, [], logged, ids)
+            for group, mine in _by_group(items):
+                subject, text, body, logged, ids = _registration_mail(mine, who, HOW["verified"])
+                _deliver("registration_enabled", subject, text, body, [], logged, ids, group)
             sent = len(items)
         db.execute(delete(RegistrationQueue).where(RegistrationQueue.claim == claim))
         db.commit()

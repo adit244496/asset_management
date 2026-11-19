@@ -3,7 +3,8 @@ import { X } from 'lucide-react';
 import api, { errorMessage } from '../api';
 import './UserModal.css';
 
-const MasterOptionModal = ({ category, label, option, onClose, onSaved }) => {
+// typeView (Type only): the list it is added to -- { key: 'asset' | 'peripheral', label, other }.
+const MasterOptionModal = ({ category, label, option, onClose, onSaved, typeView = null }) => {
   const isEdit = !!option;
   const [name, setName] = useState(option?.name || '');
   const [description, setDescription] = useState(option?.description || '');
@@ -11,11 +12,14 @@ const MasterOptionModal = ({ category, label, option, onClose, onSaved }) => {
   const [sortOrder, setSortOrder] = useState(option ? String(option.sortOrder ?? 0) : '');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
-  // Asset Types only: the abbreviation that starts new IDs (LAP -> LAP_00001).
+  // Types only: the abbreviation that starts new IDs (LAP -> LAP_00001).
   const hasCode = category === 'type';
   const [code, setCode] = useState(option?.code || '');
   const cleanCode = code.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
   const recoding = isEdit && option?.code && cleanCode && cleanCode !== option.code;
+  // Types only: added to the list it was opened from; optionally the other too.
+  const [alsoOther, setAlsoOther] = useState(false);
+  const usedFor = alsoOther ? 'both' : (typeView?.key || 'both');
 
   const inUse = option?.inUse || 0;
   const renaming = isEdit && name.trim() && name.trim() !== option.name;
@@ -36,11 +40,14 @@ const MasterOptionModal = ({ category, label, option, onClose, onSaved }) => {
       setError('The abbreviation cannot be blank — new IDs of this type are built from it.');
       return;
     }
-    if (hasCode && cleanCode && !/^[A-Z][A-Z0-9]{1,7}$/.test(cleanCode)) {
-      setError('The abbreviation must be 2 to 8 letters or digits, starting with a letter (e.g. LAP, HDD, DES1).');
+    if (hasCode && cleanCode && !/^[A-Z][A-Z0-9]{2}$/.test(cleanCode)) {
+      setError('The abbreviation must be exactly 3 letters or digits, starting with a letter (e.g. LAP, HDD, DE1).');
       return;
     }
-    const codePart = hasCode && (cleanCode || !isEdit) ? { code: cleanCode } : {};
+    const codePart = {
+      ...(hasCode && (cleanCode || !isEdit) ? { code: cleanCode } : {}),
+      ...(hasCode ? { usedFor } : {}),
+    };
 
     setSaving(true);
     setError('');
@@ -120,16 +127,41 @@ const MasterOptionModal = ({ category, label, option, onClose, onSaved }) => {
                   id="masterCode"
                   className="field-input serial-mono"
                   type="text"
-                  maxLength={8}
+                  maxLength={3}
                   value={code}
-                  placeholder={isEdit ? '' : 'Left blank: first 3 letters (DES, then DES1 …)'}
+                  placeholder={isEdit ? '' : 'Left blank: first 3 letters (DES, then DE1 …)'}
                   onChange={(e) => setCode(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())}
                 />
                 <div className="field-hint">
                   Starts the ID of every new asset or peripheral of this type
                   {cleanCode ? <> &mdash; <strong>{cleanCode}_00001</strong>, {cleanCode}_00002 &hellip;</> : null}.
-                  {' '}Each type needs its own; no two types can share one.
+                  {' '}Exactly 3 letters or digits; each type needs its own.
                 </div>
+              </div>
+            )}
+
+            {hasCode && typeView && (
+              <div className="field">
+                <label className="user-must-change" htmlFor="masterAlsoOther">
+                  <input
+                    id="masterAlsoOther"
+                    type="checkbox"
+                    checked={alsoOther}
+                    onChange={(e) => setAlsoOther(e.target.checked)}
+                  />
+                  <span>Also offer it for {typeView.other}</span>
+                </label>
+                <div className="field-hint">
+                  Added to the {typeView.label} list, so Data Entry for {typeView.label} offers it
+                  {alsoOther ? <>, and for {typeView.other} too</> : null}.
+                </div>
+              </div>
+            )}
+
+            {hasCode && !isEdit && (
+              <div className="banner banner-warning">
+                Check the name and abbreviation: a type cannot be edited once it is added. To
+                change it later it has to be deleted and added again.
               </div>
             )}
 

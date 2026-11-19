@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 
-from app import activity, crud, joiners, notices, registers
+from app import activity, crud, joiners, notices, registers, roles
 from app.api.auth import require_discard, require_verify, token_required
 from app.database import get_db
 
@@ -9,7 +9,18 @@ bp = Blueprint("verification", __name__, url_prefix="/api/verification")
 MAX_BATCH = 5000
 
 
-def _serialize(db, items_by_register, username: str) -> list[dict]:
+def _blocked_as_own(item, user) -> bool:
+    """Maker-checker: an entry cannot be verified by whoever made it --
+    except by a profile that is both maker and checker (superadmin)."""
+    return crud.entered_by(item, user.username) and not roles.can_self_verify(user.role)
+
+
+def _can_verify(item, user) -> bool:
+    return item.verification != crud.REJECTED and not _blocked_as_own(item, user)
+
+
+def _serialize(db, items_by_register, user) -> list[dict]:
+    username = user.username
     out = []
     shared = crud.shared_type_names(db)
     for reg, items in items_by_register:
@@ -23,6 +34,7 @@ def _serialize(db, items_by_register, username: str) -> list[dict]:
             dicts = [crud.asset_to_dict(p, linked_to=on.get(p.id), shared=shared) for p in items]
         for item, body in zip(items, dicts):
             body["enteredByYou"] = crud.entered_by(item, username)
+            body["canVerify"] = _can_verify(item, user)
         out.extend(dicts)
     out.sort(key=lambda d: d.get("createdAt") or "")
     return out
@@ -56,7 +68,7 @@ def _find(db, ref) -> tuple:
 def list_waiting(current_user):
     with get_db() as db:
         items = _serialize(db, [(reg, crud.list_unverified(db, reg)) for reg in registers.ALL],
-                           current_user.username)
+                           current_user)
         counts = crud.count_unverified(db)
         return jsonify({"items": items, "total": len(items),
                         "pending": counts[crud.PENDING], "rejected": counts[crud.REJECTED]})
@@ -69,8 +81,10 @@ def count_waiting(current_user):
     with get_db() as db:
         counts = crud.count_unverified(db)
         waiting = [i for reg in registers.ALL for i in crud.list_unverified(db, reg)]
+        # Waiting on you: entries you may verify, and your own sent back to you.
         for_you = sum(1 for i in waiting
-                      if (i.verification == crud.REJECTED) == crud.entered_by(i, current_user.username))
+                      if _can_verify(i, current_user)
+                      or (i.verification == crud.REJECTED and crud.entered_by(i, current_user.username)))
         return jsonify({"pending": counts[crud.PENDING], "rejected": counts[crud.REJECTED],
                         "forYou": for_you})
 
@@ -91,8 +105,8 @@ def verify(current_user):
         unverified = [i for i in found if not crud.is_verified(i)]
         sent_back = [i for i in unverified if i.verification == crud.REJECTED]
         pending = [i for i in unverified if i.verification != crud.REJECTED]
-        own = [i for i in pending if crud.entered_by(i, current_user.username)]
-        waiting = [i for i in pending if not crud.entered_by(i, current_user.username)]
+        own = [i for i in pending if _blocked_as_own(i, current_user)]
+        waiting = [i for i in pending if not _blocked_as_own(i, current_user)]
         if not waiting and sent_back:
             problem = (_sent_back_error(sent_back[0]) if len(sent_back) == 1 else
                        f"{len(sent_back)} of these were sent back and are on hold until whoever "
@@ -137,12 +151,15 @@ def reject(current_user):
         if crud.is_verified(item):
             return jsonify({"detail": f"{item.asset_id} is already in the register."}), 409
         if crud.entered_by(item, current_user.username):
-            return jsonify({"detail": _own_entry_error(item), "code": "own_entry"}), 403
+            detail = (f"You entered {item.asset_id} yourself -- correct it with Edit instead of "
+                      "sending it back to yourself." if roles.can_self_verify(current_user.role)
+                      else _own_entry_error(item))
+            return jsonify({"detail": detail, "code": "own_entry"}), 403
         crud.reject_item(db, item, current_user.username, reason)
         notices.sent_back(db, item, current_user.username, reason)
         activity.note(target=item.asset_id,
                       summary=f"Sent {item.asset_id} back from Verification: {reason[:160]!r}")
-        return jsonify(_serialize(db, [(reg, [item])], current_user.username)[0])
+        return jsonify(_serialize(db, [(reg, [item])], current_user)[0])
 
 
 @bp.route("/discard", methods=["POST"])

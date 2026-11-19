@@ -23,7 +23,8 @@ const STATE_LABEL = {
   invalid: 'skipped',
 };
 
-const MasterBulkAdd = ({ category, label, plural, existingNames, onClose, onDone }) => {
+// extra: sent with the values, e.g. { usedFor: 'asset' } for the Type list they go to.
+const MasterBulkAdd = ({ category, label, plural, existingNames, onClose, onDone, extra = null }) => {
   const [mode, setMode] = useState('file');
   const [text, setText] = useState('');
   const [saving, setSaving] = useState(false);
@@ -101,7 +102,7 @@ const MasterBulkAdd = ({ category, label, plural, existingNames, onClose, onDone
     setSaving(true);
     setError('');
     try {
-      const res = await api.post(`/masters/${encodeURIComponent(category)}/bulk`, { items });
+      const res = await api.post(`/masters/${encodeURIComponent(category)}/bulk`, { items, ...(extra || {}) });
       const added = res.data?.added ?? 0;
       const serverSkipped = res.data?.skipped ?? 0;
       const note = serverSkipped ? `, ${serverSkipped} skipped by the server` : '';

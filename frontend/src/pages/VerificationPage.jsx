@@ -7,6 +7,7 @@ import api, { errorMessage } from '../api';
 import AssetModal from '../components/AssetModal';
 import Banner from '../components/Banner';
 import SearchBox from '../components/SearchBox';
+import SecretSerial from '../components/SecretSerial';
 import { useAssets } from '../context/AssetsContext';
 import { useAuth } from '../context/AuthContext';
 import { formatDate } from '../lib/dates';
@@ -16,7 +17,7 @@ import { cloneAsset } from '../lib/schema';
 import { joinRecorded } from '../lib/notRecorded';
 import { REGISTER_LIST, SOFTWARE } from '../lib/registers';
 import {
-  REJECTED, STATE_FILTERS, VERIFIED, WHO_FILTERS, countByState, entries, filterWaiting,
+  REJECTED, STATE_FILTERS, WHO_FILTERS, countByState, entries, filterWaiting,
   notifyVerificationChanged, verifiedMessage,
 } from '../lib/verification';
 import './VerificationPage.css';
@@ -98,10 +99,6 @@ const DecisionModal = ({ kind, row, onClose, onDone }) => {
   );
 };
 
-const EDIT_FIELDS = ['sapId', 'poNo', 'type', 'model', 'description', 'location', 'floor', 'dop'];
-const EDIT_FIELDS_SOFTWARE = ['poNo', 'assetTag', 'version', 'vendor'];
-const EDIT_LABELS = { location: 'Site' };
-
 const VerificationPage = () => {
   const { setRegister, invalidateAll, fetchRecord } = useAssets();
   const { canDiscard, canWrite } = useAuth();
@@ -151,8 +148,11 @@ const VerificationPage = () => {
     () => filterWaiting(rows, { state, query, register, who }),
     [rows, state, query, register, who],
   );
-  // Verify only takes entries someone else entered that are not on hold.
-  const canVerifyRow = (r) => !r.enteredByYou && r.verification !== REJECTED;
+  // Verify takes entries that are not on hold and someone else entered --
+  // a superadmin (maker and checker) may verify their own too. The server
+  // says which per row (canVerify).
+  const canVerifyRow = (r) => (typeof r.canVerify === 'boolean'
+    ? r.canVerify : !r.enteredByYou && r.verification !== REJECTED);
   // Admins and superadmins may also tick their own and sent-back entries --
   // to clone them. Verify still skips those.
   const canPick = (r) => canWrite || canVerifyRow(r);
@@ -319,6 +319,7 @@ const VerificationPage = () => {
                   />
                 </th>
                 <th>SAP ID</th>
+                <th>Serial Number</th>
                 <th>PO Number</th>
                 <th>Type</th>
                 <th>Model</th>
@@ -350,15 +351,18 @@ const VerificationPage = () => {
                         checked={canPick(row) && selected.has(row.id)}
                         onChange={() => toggle(row.id)}
                         disabled={!canPick(row)}
-                        title={canWrite && !canVerifyRow(row)
-                          ? `Tick to clone it. ${mine ? 'You entered this, so another verifier has to verify it'
-                            : 'Sent back, so it is on hold until it is corrected'}.`
-                          : mine ? 'You entered this — another verifier has to verify it'
-                            : onHold ? 'Sent back — on hold until it is corrected' : undefined}
+                        title={!canVerifyRow(row)
+                          ? `${canWrite ? 'Tick to clone it. ' : ''}${rejected
+                            ? 'Sent back, so it is on hold until it is corrected'
+                            : 'You entered this, so another verifier has to verify it'}.`
+                          : mine ? 'You entered this — as superadmin you can verify it yourself' : undefined}
                         aria-label={`Select ${row.assetTag || row.model || row.assetId}`}
                       />
                     </td>
                     <td>{row.sapId || '—'}</td>
+                    <td className="verify-srl">
+                      {String(row.srl ?? '').trim() ? <SecretSerial record={row} /> : '—'}
+                    </td>
                     <td>{row.poNo || '—'}</td>
                     <td className="verify-wrap">{row.register === SOFTWARE ? 'SOFTWARE' : (row.type || '—')}</td>
                     <td className="verify-name verify-wrap">
@@ -396,9 +400,11 @@ const VerificationPage = () => {
                             On hold — with {row.createdBy || 'whoever entered it'} for correction
                           </span>
                         )}
-                        {!mine && !rejected && (
+                        {canVerifyRow(row) && (
                           <button type="button" className="verify-act" disabled={busy}
-                            onClick={() => verify([row])} title="Verify — accept into the register"
+                            onClick={() => verify([row])}
+                            title={mine ? 'Verify your own entry — accept it into the register'
+                              : 'Verify — accept into the register'}
                             aria-label="Verify">
                             <Check size={15} />
                           </button>
@@ -454,15 +460,9 @@ const VerificationPage = () => {
           asset={editing.record}
           sentBack={editing.row.verification === REJECTED
             ? { note: editing.row.verificationNote, by: editing.row.verifiedBy } : null}
-          onlyFields={editing.row.register === SOFTWARE ? EDIT_FIELDS_SOFTWARE : EDIT_FIELDS}
-          fieldLabels={EDIT_LABELS}
-          onSaved={(saved) => {
-            if (saved?.verification === VERIFIED) {
-              setBanner({
-                text: `${editing.row.assetId} has a SAP ID, so it went into the register without verification.`,
-                kind: 'success',
-              });
-            } else if (editing.row.verification === REJECTED) {
+          editableOnly
+          onSaved={() => {
+            if (editing.row.verification === REJECTED) {
               setBanner({
                 text: `${editing.row.assetId} corrected and sent for verification again.`,
                 kind: 'success',

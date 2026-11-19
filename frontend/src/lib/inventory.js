@@ -1,39 +1,75 @@
-import { filterBy, haystackOf } from './textSearch';
+export const ASSET = 'asset';
+export const PERIPHERAL = 'peripheral';
+export const SOFTWARE = 'software';
 
-const IN_STOCK = /^in[\s_-]*stock$/i;
+export const REGISTERS = {
+  [ASSET]: {
+    key: ASSET,
+    path: 'assets',
+    label: 'Assets',
+    one: 'asset',
+    many: 'assets',
+    idPrefix: 'AMB',
+    labels: {},
+  },
+  [PERIPHERAL]: {
+    key: PERIPHERAL,
+    path: 'peripherals',
+    label: 'Peripherals',
+    one: 'peripheral',
+    many: 'peripherals',
+    idPrefix: 'PRP',
+    labels: {
+      assetId: 'Peripheral ID',
+      type: 'Peripheral Type',
+      assetTag: 'Peripheral Name',
+    },
+  },
+  [SOFTWARE]: {
+    key: SOFTWARE,
+    path: 'softwares',
+    label: 'Softwares',
+    one: 'software',
+    many: 'softwares',
+    idPrefix: 'SFT',
+    fields: ['assetTag', 'version', 'status', 'srl', 'quantity', 'poNo',
+      'startDate', 'warrantyEnd', 'price', 'vendor', 'comments'],
+    labels: {
+      assetId: 'Software ID',
+      assetTag: 'Software Name',
+      status: 'Usage',
+      srl: 'Serial Number',
+      poNo: 'PO Number',
+      warrantyEnd: 'Renewal Date',
+      comments: 'Comment',
+    },
+  },
+};
 
-export function isInStock(status) {
-  return IN_STOCK.test((status ?? '').toString().trim());
+export const REGISTER_KEYS = [ASSET, PERIPHERAL, SOFTWARE];
+
+export const REGISTER_LIST = REGISTER_KEYS.map((key) => REGISTERS[key]);
+
+export function registerOf(key) {
+  return REGISTERS[key] || REGISTERS[ASSET];
 }
 
-const IN_USE = /^in[\s_-]*use$/i;
-
-// An Assigned Date belongs to being In Use (backend crud.note_assigned_date).
-export function isInUse(status) {
-  return IN_USE.test((status ?? '').toString().trim());
+export function isRegisterKey(key) {
+  return Object.prototype.hasOwnProperty.call(REGISTERS, key);
 }
 
-export function inStockOnly(rows) {
-  return (rows || []).filter((r) => r && !r.isDeleted && isInStock(r.status));
+export function pathOf(key) {
+  return registerOf(key).path;
 }
 
-export function countByType(rows) {
-  const counts = new Map();
-  (rows || []).forEach((r) => {
-    const type = (r?.type ?? '').toString().trim() || 'Not recorded';
-    counts.set(type, (counts.get(type) || 0) + 1);
-  });
-  return [...counts.entries()]
-    .map(([type, count]) => ({ type, count }))
-    .sort((a, b) => b.count - a.count || a.type.localeCompare(b.type));
+export function labelFor(columnKey, defaultLabel, registerKey) {
+  return registerOf(registerKey).labels[columnKey] || defaultLabel;
 }
 
-export function stockHaystack(row) {
-  if (!row) return '';
-  return haystackOf(row.assetId, row.assetTag, row.type, row.model, row.srl,
-    row.serviceTag, row.location, row.company, row.description);
+export function fieldsOf(registerKey) {
+  return registerOf(registerKey).fields || null;
 }
 
-export function filterStock(rows, query) {
-  return filterBy(rows, query, stockHaystack);
+export function isHardware(registerKey) {
+  return registerKey === ASSET || registerKey === PERIPHERAL;
 }

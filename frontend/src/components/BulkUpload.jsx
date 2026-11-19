@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import { Download, UploadCloud } from 'lucide-react';
 import { errorMessage } from '../api';
 import { useAssets } from '../context/AssetsContext';
+import { useAuth } from '../context/AuthContext';
 import { useMasters } from '../context/MastersContext';
 import { formatIfDate } from '../lib/dates';
 import { exportImportReport, exportTemplate } from '../lib/exporters';
@@ -18,6 +19,7 @@ const PREVIEW_COLUMNS = ['assetTag', 'type', 'model', 'user', 'site', 'status'];
 const PREVIEW_COLUMNS_PERIPHERAL = ['assetTag', 'type', 'model', 'srl', 'site', 'status'];
 const PREVIEW_COLUMNS_SOFTWARE = ['assetTag', 'version', 'status', 'quantity', 'warrantyEnd', 'vendor'];
 const PREVIEW_ROWS = 8;
+const ASSET_DEDUPE_DEFAULT = 'srl';
 const REPORT_LIMIT = 25;
 const DEDUPE_CHOICES = [
   { value: '', label: 'Skip records already in the register (recommended)' },
@@ -30,6 +32,7 @@ const DEDUPE_CHOICES = [
 const BulkUpload = () => {
   const { bulkImport, formOptionsFor, register, meta } = useAssets();
   const { categoriesFor, namesFor } = useMasters();
+  const { isSuperadmin } = useAuth();
   const isAssets = register === ASSET;
   const previewColumns = isAssets ? PREVIEW_COLUMNS
     : register === SOFTWARE ? PREVIEW_COLUMNS_SOFTWARE : PREVIEW_COLUMNS_PERIPHERAL;
@@ -38,7 +41,18 @@ const BulkUpload = () => {
   const [status, setStatus] = useState(null);
   const [parsed, setParsed] = useState(null);
   const [fileName, setFileName] = useState('');
-  const [dedupeKey, setDedupeKey] = useState('');
+  // The duplicate check picked for each register; Assets and Peripherals
+  // default to matching on Srl No., Software (serials may repeat) to the
+  // automatic check.
+  const srlByDefault = register !== SOFTWARE;
+  const [dedupeChoice, setDedupeChoice] = useState({});
+  const dedupeKey = dedupeChoice[register] ?? (srlByDefault ? ASSET_DEDUPE_DEFAULT : '');
+  const setDedupeKey = (value) => setDedupeChoice((c) => ({ ...c, [register]: value }));
+  const dedupeChoices = srlByDefault
+    ? [...DEDUPE_CHOICES].sort((a, b) => (b.value === ASSET_DEDUPE_DEFAULT) - (a.value === ASSET_DEDUPE_DEFAULT))
+      .map((c) => (c.value === '' ? { ...c, label: 'Skip records already in the register' } : c))
+      .map((c) => (c.value === ASSET_DEDUPE_DEFAULT ? { ...c, label: `${c.label} (default)` } : c))
+    : DEDUPE_CHOICES;
   const [createUsers, setCreateUsers] = useState(false);
   const [importing, setImporting] = useState(false);
   const [report, setReport] = useState(null);
@@ -93,13 +107,13 @@ const BulkUpload = () => {
     }
   };
 
-  const runImport = async (unknownMasters) => {
+  const runImport = async (unknownMasters, typeCodes = null) => {
     if (!parsed?.rows?.length) return;
     setUnknown(null);
     setImporting(true);
     const posted = parsed.rows;
     try {
-      const result = await bulkImport(posted, dedupeKey || null, createUsers, unknownMasters);
+      const result = await bulkImport(posted, dedupeKey || null, createUsers, unknownMasters, typeCodes);
       const skippedNote = result.skipped ? `, skipped ${result.skipped}` : '';
       const accountNote = result.accounts
         ? ` Created ${result.accounts.created.length} user record(s).`
@@ -118,21 +132,12 @@ const BulkUpload = () => {
       const spellingNote = fixed
         ? ` ${fixed} value(s) were recorded using the master data's spelling.`
         : '';
-      const bySap = result.acceptedBySapId || 0;
-      const waiting = result.added - bySap;
       const where = result.awaitingVerification
-        ? `${skippedNote}.`
-        + (bySap
-          ? ` ${bySap} ${bySap === 1 ? 'has' : 'have'} a SAP ID, so went straight into the `
-          + `${meta.one} register without verification. The other ${waiting} `
-          + `${waiting === 1 ? 'is' : 'are'} waiting in Verification`
-          : ' They are waiting in Verification')
-        + ` and join the ${meta.one} register once another verifier has checked them.`
-        : `${skippedNote} into the ${meta.one} register.`
-        + (bySap
-          ? ` ${bySap === result.added ? (bySap === 1 ? 'It has' : 'They have') : `${bySap} ${bySap === 1 ? 'has' : 'have'}`}`
-          + ' a SAP ID, so skipped Verification.'
-          : '');
+        ? `${skippedNote}. They are waiting in Verification`
+        + ` and join the ${meta.one} register once ${isSuperadmin
+          ? 'they are verified — as superadmin you can verify them yourself there'
+          : 'another verifier has checked them'}.`
+        : `${skippedNote} into the ${meta.one} register.`;
       setStatus({
         text: `Imported ${result.added} record(s)${where}`
           + `${accountNote}${masterNote}${spellingNote}`,
@@ -388,7 +393,7 @@ const BulkUpload = () => {
               value={dedupeKey}
               onChange={(e) => setDedupeKey(e.target.value)}
             >
-              {DEDUPE_CHOICES.map((c) => (
+              {dedupeChoices.map((c) => (
                 <option key={c.value} value={c.value}>
                   {register === SOFTWARE && ['srl', 'poNo', 'assetTag'].includes(c.value)
                     ? `Match on ${byKeyFor(c.value, register).label} only`
@@ -438,7 +443,8 @@ const BulkUpload = () => {
         <UnknownMastersDialog
           unknown={unknown}
           rows={parsed?.rows || []}
-          onInclude={() => runImport('include')}
+          codesFor={register !== SOFTWARE}
+          onInclude={(typeCodes) => runImport('include', typeCodes)}
           onReject={() => runImport('reject')}
           onCancel={() => setUnknown(null)}
         />

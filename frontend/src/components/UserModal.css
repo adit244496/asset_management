@@ -12,3 +12,22 @@
   font-size: 10.5px;
   color: var(--text-muted);
 }
+
+.user-must-change {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.user-must-change input {
+  margin-top: 2px;
+}
+
+.user-must-change .field-hint {
+  display: block;
+  margin-top: 2px;
+}

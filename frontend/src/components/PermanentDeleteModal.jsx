@@ -67,6 +67,13 @@ const PermanentDeleteModal = ({ record, noun = 'asset', onClose, onDeleted }) =>
                   may want this {noun} back, cancel and scrap it instead.
                 </li>
               )}
+              {noun === 'asset' && String(record?.linkedPeripheralsText || '').trim() && (
+                <li>
+                  Its linked peripherals (<strong>{record.linkedPeripheralsText}</strong>) are
+                  unlinked and <strong>sent to stock</strong> &mdash; a shared one still on
+                  another asset just comes off this one.
+                </li>
+              )}
               <li>
                 Its history is <strong>kept</strong>, including a record of this
                 deletion and who made it.
@@ -79,11 +86,17 @@ const PermanentDeleteModal = ({ record, noun = 'asset', onClose, onDeleted }) =>
             </ul>
           </div>
 
-          <div className="field">
+          {/* Its own form with a hidden username: otherwise the browser's
+              password manager treats the page's search box as the username
+              box and fills the saved username (e.g. superadmin) into it. */}
+          <form className="field" autoComplete="on" onSubmit={(e) => e.preventDefault()}>
+            <input type="text" name="username" autoComplete="username" value={user?.username || ''}
+              readOnly hidden tabIndex={-1} aria-hidden="true" />
             <label htmlFor="purgePassword">
               Password for {user?.username ? <strong>{user.username}</strong> : 'your account'}
             </label>
             <input
+              name="password"
               id="purgePassword"
               className="field-input"
               type="password"
@@ -96,7 +109,7 @@ const PermanentDeleteModal = ({ record, noun = 'asset', onClose, onDeleted }) =>
             <div className="field-hint">
               Confirming with your own password is what makes this deliberate.
             </div>
-          </div>
+          </form>
         </div>
 
         <div className="modal-foot">

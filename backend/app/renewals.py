@@ -106,8 +106,8 @@ def _table(entries: list[dict]) -> tuple[str, str]:
             f"{'color:' + tone + ';font-weight:600' if i == 3 else ''}'>{html.escape(str(v) or '—')}</td>"
             for i, v in enumerate(cells)) + "</tr>")
     head = "".join(f"<th style='padding:4px 8px;text-align:left;border-bottom:2px solid #333'>{h}</th>"
-                   for h in ("ID", "Software", "Renewal date", "When", "Seats", "Vendor / Used By",
-                             "Price", "PO Number"))
+                   for h in ("ID", "Software", "Renewal date", "When", "Seats", "Vendor Name",
+                             "Price per License", "PO Number"))
     return "\n".join(lines), (f"<table style='border-collapse:collapse;font-size:13px'>"
                               f"<thead><tr>{head}</tr></thead><tbody>{''.join(rows)}</tbody></table>")
 
@@ -126,9 +126,10 @@ def _record(db: Session, entries: list[dict], stage: str, today: date, to: list[
 
 
 def send_due(db: Session, cfg: NotificationSettings, today: date) -> list[str]:
-    from app.approvals import _log
+    # Renewals are software notices: they go to the Software recipient group.
+    from app.approvals import SOFTWARE, _log, inform_list, it_heads
     todo = plan(db, today)
-    cc = mailer.split_addresses(cfg.cc_emails)
+    cc = inform_list(cfg, SOFTWARE)
     done: list[str] = []
 
     early = [(STAGE_30, todo[STAGE_30]), (STAGE_15, todo[STAGE_15])]
@@ -136,7 +137,7 @@ def send_due(db: Session, cfg: NotificationSettings, today: date) -> list[str]:
         if not cc:
             n = sum(len(e) for _, e in early)
             _log(db, f"Software renewals: {n} licence(s) reached the 30/15-day notice, but "
-                     "Also inform has no addresses -- nothing sent", ok=False)
+                     "Software also inform has no addresses -- nothing sent", ok=False)
         else:
             for stage, entries in early:
                 if not entries:
@@ -151,18 +152,18 @@ def send_due(db: Session, cfg: NotificationSettings, today: date) -> list[str]:
                     mailer.send(cfg, cc, subject, f"{intro}\n\n{text}",
                                 _wrap(f"<p>{html.escape(intro)}</p>{table}"))
                     _record(db, entries, stage, today, cc)
-                    done.append(f"{stage}-day notice for {n} licence(s) to Also inform")
-                    _log(db, f"Emailed the {stage}-day software renewal notice ({n}) to Also inform")
+                    done.append(f"{stage}-day notice for {n} licence(s) to Software also inform")
+                    _log(db, f"Emailed the {stage}-day software renewal notice ({n}) to Software also inform")
                 except mailer.MailError as exc:
                     _log(db, f"Could not email the {stage}-day software renewal notice: {exc}", ok=False)
 
     daily = todo[STAGE_DAILY]
     if daily:
-        if not cfg.it_head_email:
+        if not it_heads(cfg, SOFTWARE):
             _log(db, "Software renewals: licences are within 7 days of renewal, but there is no "
-                     "IT head address -- nothing sent", ok=False)
+                     "software head address -- nothing sent", ok=False)
         else:
-            to = mailer.split_addresses(cfg.it_head_email)
+            to = it_heads(cfg, SOFTWARE)
             heads = {a.lower() for a in to}
             copy = [a for a in cc if a.lower() not in heads]
             text, table = _table(daily)
@@ -177,9 +178,9 @@ def send_due(db: Session, cfg: NotificationSettings, today: date) -> list[str]:
                 mailer.send(cfg, to, subject, f"{intro}\n\n{text}",
                             _wrap(f"<p>{html.escape(intro)}</p>{table}"), cc=copy)
                 _record(db, daily, STAGE_DAILY, today, to + copy)
-                done.append(f"daily notice for {n} licence(s) to the IT head")
-                _log(db, f"Emailed the daily software renewal notice ({n}) to the IT head"
-                         + (" and Also inform" if copy else ""))
+                done.append(f"daily notice for {n} licence(s) to the software head")
+                _log(db, f"Emailed the daily software renewal notice ({n}) to the software head"
+                         + (" and Software also inform" if copy else ""))
             except mailer.MailError as exc:
                 _log(db, f"Could not email the daily software renewal notice: {exc}", ok=False)
     return done

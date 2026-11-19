@@ -38,8 +38,8 @@ MASTER_SPECS: list[MasterSpec] = [
     MasterSpec(
         key="type",
         model=AssetType,
-        label="Asset Type",
-        plural="Asset Types",
+        label="Type",
+        plural="Types",
         asset_attr="type",
     ),
     MasterSpec(

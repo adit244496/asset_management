@@ -1,6 +1,7 @@
 import { formatDate, formatDateTime, todayIST } from './dates';
 import { normalizeKey } from './masterFile';
 import { readOptions, uses1904 } from './parser';
+import { USED_FOR_SHORT } from './typeUse';
 import { USER_COLUMNS, mapRows, rowProblems } from './userImport';
 
 const loadXLSX = () => import('xlsx');
@@ -12,7 +13,7 @@ const yesNo = (v) => (v ? 'Yes' : 'No');
 
 const headerFor = (category) => [
   category.label, 'Description', 'Active', 'Order',
-  ...(category.key === 'type' ? ['Shared'] : []),
+  ...(category.key === 'type' ? ['Shared', 'Used for'] : []),
   'In use',
 ];
 
@@ -26,7 +27,7 @@ export async function downloadMasterWorkbook(categories, items, { users = [], fi
   categories.forEach((category) => {
     const rows = (items?.[category.key] || []).map((r) => [
       r.name, r.description || '', yesNo(r.isActive), r.sortOrder ?? '',
-      ...(category.key === 'type' ? [yesNo(r.isShared)] : []),
+      ...(category.key === 'type' ? [yesNo(r.isShared), USED_FOR_SHORT[r.usedFor] || 'Both'] : []),
       r.inUse ?? '',
     ]);
     const ws = XLSX.utils.aoa_to_sheet([headerFor(category), ...rows]);
@@ -50,7 +51,8 @@ export async function downloadMasterWorkbook(categories, items, { users = [], fi
     ['Users', users.length],
     [],
     ['One sheet per list, and one for Users. To fill them from this file, open Master Data and choose Upload workbook.'],
-    ['Active and Shared take Yes or No. Order sets the dropdown order. In use is for reading only and is not uploaded.'],
+    ['Active and Shared take Yes or No. Used for (Types) takes Assets, Peripherals or Both. Order sets the dropdown order. In use is for reading only and is not uploaded.'],
+    ['Types cannot be edited: for a type already in the list only Active and Shared are taken from the sheet; a new type is added with its Used for.'],
     ['A value already in a list is updated to what the sheet says; a value not in the list is added; nothing is deleted.'],
     ['Users: matched by Email ID. Someone already on file has Email ID, Location and Date of Joining updated; someone new '
       + 'is added as an assignee on the starting password. All four columns are needed. Username, Profile and Active are '
@@ -67,6 +69,7 @@ const COLUMN_HEADERS = {
   isActive: ['active', 'is active', 'status (active)'],
   sortOrder: ['order', 'sort order', 'sortorder'],
   isShared: ['shared', 'is shared'],
+  usedFor: ['used for', 'usedfor', 'register'],
 };
 
 export async function readMasterWorkbook(file, categories) {
@@ -76,6 +79,9 @@ export async function readMasterWorkbook(file, categories) {
   let users = null;
   const byName = new Map();
   categories.forEach((c) => [c.plural, c.label, c.key].forEach((n) => byName.set(normalizeKey(n), c)));
+  // Workbooks saved before the list was renamed have an "Asset Types" sheet.
+  const typeList = categories.find((c) => c.key === 'type');
+  if (typeList) ['Asset Types', 'Asset Type'].forEach((n) => byName.set(normalizeKey(n), typeList));
 
   const lists = {};
   const rowNumbers = {};
@@ -121,7 +127,10 @@ export async function readMasterWorkbook(file, categories) {
       Object.entries(cols).forEach(([k, idx]) => {
         if (idx >= 0) entry[k] = String(row[idx] ?? '').trim();
       });
-      if (category.key !== 'type') delete entry.isShared;
+      if (category.key !== 'type') {
+        delete entry.isShared;
+        delete entry.usedFor;
+      }
       entries.push(entry);
       numbers.push(i + 2);
     });

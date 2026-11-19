@@ -11,8 +11,8 @@ import './NotificationsPanel.css';
 
 const MODE_OPTIONS = [
   { value: 'off', label: 'Off', hint: 'Nothing is emailed. Scrapping and selling work as they always have.' },
-  { value: 'inform', label: 'Inform', hint: 'The change happens straight away. The IT head and Also inform are emailed about it.' },
-  { value: 'approve', label: 'Require the IT head’s approval', hint: 'Nothing is scrapped or sold until the IT head approves from the email; the records are locked meanwhile. Also inform gets an info copy, then the outcome.' },
+  { value: 'inform', label: 'Inform', hint: 'The change happens straight away. The group’s head and Also inform are emailed about it — the IT head for assets and peripherals, the software head for software.' },
+  { value: 'approve', label: 'Require the head’s approval', hint: 'Nothing is scrapped or sold until the group’s head approves from the email (the IT head for assets and peripherals, the software head for software); the records are locked meanwhile. Also inform gets an info copy, then the outcome.' },
 ];
 
 const splitEmails = (text) => String(text || '').split(/[\s,;]+/).map((s) => s.trim()).filter(Boolean);
@@ -88,7 +88,7 @@ const STATUS_LABELS = {
 };
 
 const EMPTY = {
-  mode: 'off', itHeadEmail: '', ccEmails: '', smtpHost: '', smtpPort: 587, smtpSecurity: 'starttls',
+  mode: 'off', itHeadEmail: '', ccEmails: '', softwareHeadEmail: '', softwareCcEmails: '', smtpHost: '', smtpPort: 587, smtpSecurity: 'starttls',
   smtpUsername: '', smtpPassword: '', fromAddress: '', appBaseUrl: '', summaryEnabled: true,
   summaryTime: '18:00', passwordSaved: false,
   joinerEnabled: false, joinerDays: 7, transferEnabled: false, registrationEnabled: false,
@@ -180,11 +180,11 @@ const NotificationsPanel = () => {
     }
   };
 
-  const sendTest = async () => {
-    setTesting(true);
+  const sendTest = async (group = 'hardware') => {
+    setTesting(group);
     setBanner(null);
     try {
-      const res = await api.post('/notifications/test', {});
+      const res = await api.post('/notifications/test', { group });
       setBanner({ text: `Test email sent to ${res.data.to}. Check that inbox.`, kind: 'success' });
     } catch (err) {
       setBanner({ text: errorMessage(err, 'The test email could not be sent.'), kind: 'error' });
@@ -269,10 +269,16 @@ const NotificationsPanel = () => {
   const sending = form.mode !== 'off' || form.joinerEnabled || form.transferEnabled
     || form.registrationEnabled || form.verificationEnabled || form.renewalEnabled;
   const mailing = sending || form.exportEnabled;
+  // Required marks: the Assets & Peripherals head for hardware notices, the
+  // software head for renewals; scrap and sale emails need both.
+  const needsItHead = form.mode !== 'off' || form.joinerEnabled || form.transferEnabled
+    || form.registrationEnabled;
+  const needsSoftwareHead = form.mode !== 'off' || form.renewalEnabled;
   const exportTo = splitEmails(form.exportRecipients);
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const informCount = splitEmails(form.ccEmails).length;
   const plusInform = informCount ? ` · Cc Also inform (${informCount})` : '';
+  const swInformCount = splitEmails(form.softwareCcEmails).length;
 
   return (
     <div className="notify-panel">
@@ -280,14 +286,20 @@ const NotificationsPanel = () => {
 
       <section className="notify-section">
         <h3><Users size={15} /> Who is emailed</h3>
+        <p className="notify-muted notify-explain">
+          Two groups, each receiving the notices about its own records: <strong>Assets &amp;
+            Peripherals</strong>, and <strong>Software</strong>.
+        </p>
+
+        <h4 className="notify-group-title">Assets &amp; Peripherals</h4>
         <div className="notify-grid">
           <div className="field">
-            <label htmlFor="nIthead">IT head’s email {sending ? '*' : ''}</label>
+            <label htmlFor="nIthead">IT head’s email {needsItHead ? '*' : ''}</label>
             <EmailListInput id="nIthead" value={form.itHeadEmail} onChange={(v) => set('itHeadEmail', v)}
               placeholder="ithead@ambujaneotia.com — Enter to add" />
             <p className="field-hint">
-              One or more addresses — type or paste them and press Enter. Each receives every notice
-              below and the approval links; the first to approve or reject decides.
+              One or more addresses — type or paste them and press Enter. Each receives every asset
+              and peripheral notice and the approval links; the first to approve or reject decides.
             </p>
           </div>
           <div className="field notify-span2">
@@ -295,7 +307,31 @@ const NotificationsPanel = () => {
             <EmailListInput id="nCc" value={form.ccEmails} onChange={(v) => set('ccEmails', v)} />
             <p className="field-hint">
               As many addresses as needed — type or paste them and press Enter; click one to edit it.
-              Copied on every notice, outcome and summary — never on an email with approval links.
+              Copied on every asset and peripheral notice, outcome and summary — never on an email
+              with approval links.
+            </p>
+          </div>
+        </div>
+
+        <h4 className="notify-group-title">Software</h4>
+        <div className="notify-grid">
+          <div className="field">
+            <label htmlFor="nSwHead">Software head’s email {needsSoftwareHead ? '*' : ''}</label>
+            <EmailListInput id="nSwHead" value={form.softwareHeadEmail}
+              onChange={(v) => set('softwareHeadEmail', v)}
+              placeholder="softwarehead@ambujaneotia.com — Enter to add" />
+            <p className="field-hint">
+              Receives every software notice — renewal reminders, software scrapped or sold, new
+              software registered — and the approval links for software.
+            </p>
+          </div>
+          <div className="field notify-span2">
+            <label htmlFor="nSwCc">Also inform (software)</label>
+            <EmailListInput id="nSwCc" value={form.softwareCcEmails}
+              onChange={(v) => set('softwareCcEmails', v)} />
+            <p className="field-hint">
+              Copied on every software notice, outcome and summary, and sent the 30- and 15-day
+              renewal reminders — never on an email with approval links.
             </p>
           </div>
         </div>
@@ -305,8 +341,9 @@ const NotificationsPanel = () => {
         <h3><Mail size={15} /> What is emailed</h3>
 
         <Notice icon={Trash2} title="An asset is scrapped or sold"
-          to={form.mode === 'approve' ? `Approval: IT head${informCount ? ' · Info: Also inform' : ''}`
-            : `To the IT head${plusInform}`}>
+          to={form.mode === 'approve'
+            ? 'Approval: IT head (assets, peripherals) · software head (software) · Info: each group’s Also inform'
+            : 'To the IT head (assets, peripherals) · the software head (software), each with its Also inform'}>
           <div className="notify-modes" role="radiogroup" aria-label="Scrap and sale emails">
             {MODE_OPTIONS.map((m) => (
               <label key={m.value} className={`notify-mode${form.mode === m.value ? ' active' : ''}`}>
@@ -333,7 +370,8 @@ const NotificationsPanel = () => {
           </p>
         </Notice>
 
-        <Notice icon={PackagePlus} title="A new asset is registered" to={`To the IT head${plusInform}`}>
+        <Notice icon={PackagePlus} title="A new asset is registered"
+          to="Assets and peripherals to the IT head · software to the software head · each with its Also inform">
           <label className="notify-check notify-check-top">
             <input type="checkbox" checked={form.registrationEnabled}
               onChange={(e) => set('registrationEnabled', e.target.checked)} />
@@ -342,7 +380,8 @@ const NotificationsPanel = () => {
           <p className="notify-muted notify-explain">
             Sent when records enter the register — added from Data Entry, uploaded, or accepted from
             Verification when new entries wait there. One email per action: an upload of 500 rows is
-            one email listing them, not 500. Entries accepted from Verification are collected: once
+            one email listing them, not 500 (software in a separate email, to the Software group).
+            Entries accepted from Verification are collected: once
             verifying has paused for 10 minutes (or after an hour at most), one email lists everything
             verified, grouped by PO number — a bulk order verified row by row is one email.
           </p>
@@ -386,7 +425,7 @@ const NotificationsPanel = () => {
         </Notice>
 
         <Notice icon={CalendarClock} title="A software is nearing its renewal date"
-          to="Also inform at 30 and 15 days · the IT head, with Also inform, daily from 7 days">
+          to="Software group: its Also inform at 30 and 15 days · the software head, with its Also inform, daily from 7 days">
           <label className="notify-check notify-check-top">
             <input type="checkbox" checked={form.renewalEnabled}
               onChange={(e) => set('renewalEnabled', e.target.checked)} />
@@ -394,14 +433,15 @@ const NotificationsPanel = () => {
           </label>
           <p className="notify-muted notify-explain">
             Checked once a day, against each software’s Renewal Date. <strong>30 days</strong> before
-            and again <strong>15 days</strong> before, Also inform is emailed. From <strong>7 days</strong>
-            {' '}before, the IT head is emailed <strong>every day</strong>, with Also inform copied —
+            and again <strong>15 days</strong> before, the software Also inform is emailed. From
+            {' '}<strong>7 days</strong> before, the software head is emailed <strong>every day</strong>,
+            with the software Also inform copied —
             through the renewal date and past it, until the Renewal Date is updated or the software is
             scrapped or sold. Each day’s email lists every licence due, so ten licences are one email.
           </p>
-          {form.renewalEnabled && !informCount && (
+          {form.renewalEnabled && !swInformCount && (
             <p className="notify-warn">
-              Also inform has no addresses, so the 30- and 15-day reminders have no one to go to. Add
+              The software Also inform has no addresses, so the 30- and 15-day reminders have no one to go to. Add
               them above; a reminder that could not be sent goes out once there is someone to send it to.
             </p>
           )}
@@ -591,9 +631,15 @@ const NotificationsPanel = () => {
       </section>
 
       <div className="notify-actions">
-        <button type="button" className="btn-secondary" onClick={sendTest} disabled={testing || saving}
-          title="Sends to the IT head’s address, using the SAVED settings">
-          <Send size={14} /> {testing ? 'Sending…' : 'Send test email'}
+        <button type="button" className="btn-secondary" onClick={() => sendTest('hardware')}
+          disabled={Boolean(testing) || saving}
+          title="Sends to the IT head’s address (Assets & Peripherals), using the SAVED settings">
+          <Send size={14} /> {testing === 'hardware' ? 'Sending…' : 'Test: Assets & Peripherals'}
+        </button>
+        <button type="button" className="btn-secondary" onClick={() => sendTest('software')}
+          disabled={Boolean(testing) || saving}
+          title="Sends to the software head’s address, using the SAVED settings">
+          <Send size={14} /> {testing === 'software' ? 'Sending…' : 'Test: Software'}
         </button>
         <button type="button" className="btn-primary" onClick={() => save()} disabled={saving}>
           {saving ? 'Saving…' : 'Save settings'}

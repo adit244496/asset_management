@@ -140,6 +140,22 @@
   max-width: 900px;
 }
 
+.notify-group-title {
+  margin: 14px 0 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+}
+
+.notify-group-title:first-of-type {
+  margin-top: 4px;
+  padding-top: 0;
+  border-top: 0;
+}
+
 .notify-warn {
   margin: 0 0 10px;
   padding: 7px 10px;

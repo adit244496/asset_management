@@ -19,6 +19,7 @@ import {
 import { isInStock, isInUse, isScrapped, isSoldOrDisposed } from '../lib/statusClass';
 import { todayIST } from '../lib/dates';
 import { SOFTWARE } from '../lib/registers';
+import { isExpiredSoftware, shownUsage } from '../lib/softwareUsage';
 import './DashboardPage.css';
 
 const RENEWAL_SOON_DAYS = 30;
@@ -32,8 +33,9 @@ const rupees = (n) => `₹ ${n.toLocaleString('en-IN', { maximumFractionDigits: 
 function computeSoftwareTiles(rows) {
   const total = rows.length;
   const seats = rows.reduce((s, r) => s + (Number.parseInt(r.quantity, 10) || 0), 0);
-  const active = rows.filter((r) => isInUse(r.status)).length;
-  const inStock = rows.filter((r) => isInStock(r.status)).length;
+  // Expired software has no Usage: it counts as neither In Use nor In Stock.
+  const active = rows.filter((r) => isInUse(shownUsage(r, SOFTWARE))).length;
+  const inStock = rows.filter((r) => isInStock(shownUsage(r, SOFTWARE))).length;
   const today = todayIso();
   const soon = addDaysIso(today, RENEWAL_SOON_DAYS);
   const dated = rows.filter((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.warrantyEnd || ''));
@@ -48,10 +50,10 @@ function computeSoftwareTiles(rows) {
     { key: 'active', label: 'In Use', value: fmt(active), sub: pct(active), tone: 'good' },
     { key: 'stock', label: 'In Stock', value: fmt(inStock), sub: pct(inStock) },
     dated.length === 0
-      ? { key: 'renewal', label: 'Renewal Overdue', value: '—', sub: 'No renewal dates recorded' }
+      ? { key: 'renewal', label: 'Expired', value: '—', sub: 'No renewal dates recorded' }
       : {
         key: 'renewal',
-        label: 'Renewal Overdue',
+        label: 'Expired',
         value: fmt(overdue),
         sub: dueSoon ? `${fmt(dueSoon)} due in ${RENEWAL_SOON_DAYS} days` : `of ${fmt(dated.length)} with a date`,
         tone: overdue ? 'critical' : 'good',
@@ -75,20 +77,26 @@ const SoftwareDashboard = ({ live }) => {
   );
   const rows = useMemo(() => live.filter((r) => matchesOption(r.vendor, vendorFilter)), [live, vendorFilter]);
   const tiles = useMemo(() => computeSoftwareTiles(rows), [rows]);
-  const statusConfig = useMemo(() => buildCatBar(rows, 'status', isDark), [rows, isDark]);
+  // Usage chart: an expired software is counted as "Expired", not by its Usage.
+  const usageRows = useMemo(
+    () => rows.map((r) => (isExpiredSoftware(r, SOFTWARE) ? { ...r, status: 'Expired' } : r)),
+    [rows],
+  );
+  const statusConfig = useMemo(() => buildCatBar(usageRows, 'status', isDark), [usageRows, isDark]);
   const vendorConfig = useMemo(() => buildSeqBar(rows, 'vendor', 8, isDark), [rows, isDark]);
   const nameConfig = useMemo(() => buildSeqBar(rows, 'assetTag', 8, isDark), [rows, isDark]);
   const renewalConfig = useMemo(() => buildTrend(rows, 'warrantyEnd', isDark), [rows, isDark]);
   const breakdown = useCallback((key, limit, noun) => {
-    const bucket = otherBucket(rows, key, limit);
+    const source = key === 'status' ? usageRows : rows;
+    const bucket = otherBucket(source, key, limit);
     if (!bucket.hidden) return undefined;
-    return { ...bucket, noun, buildConfig: () => buildBreakdownBar(rows, key, isDark) };
-  }, [rows, isDark]);
+    return { ...bucket, noun, buildConfig: () => buildBreakdownBar(source, key, isDark) };
+  }, [rows, usageRows, isDark]);
 
   return (
     <>
       <div className="filters-bar">
-        <label htmlFor="filterVendor">Vendor / Used By</label>
+        <label htmlFor="filterVendor">Vendor Name</label>
         <select id="filterVendor" className="dash-select" value={vendorFilter}
           onChange={(e) => setVendorFilter(e.target.value)}>
           <option value="">All vendors</option>
@@ -101,7 +109,7 @@ const SoftwareDashboard = ({ live }) => {
       <KpiRow tiles={tiles} />
       <div className="dashboard-grid">
         <div className="dashboard-row dashboard-row-bottom">
-          <ChartCard title="Softwares by Status" config={statusConfig} breakdown={breakdown('status', 8, 'statuses')} />
+          <ChartCard title="Softwares by Usage" config={statusConfig} breakdown={breakdown('status', 8, 'statuses')} />
           <ChartCard title="Softwares by Vendor" config={vendorConfig} breakdown={breakdown('vendor', 8, 'vendors')} />
           <ChartCard title="Records by Software" config={nameConfig} breakdown={breakdown('assetTag', 8, 'softwares')} />
         </div>
@@ -247,37 +255,37 @@ const DashboardPage = () => {
         </div>
 
         {register !== SOFTWARE && (
-        <div className="filters-bar">
-          <label htmlFor="filterType">{typeLabel}</label>
-          <select
-            id="filterType"
-            className="dash-select"
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-          >
-            <option value="">All {typeLabel}s</option>
-            {typeOptions.map((v) => <option key={v} value={v}>{v}</option>)}
-          </select>
+          <div className="filters-bar">
+            <label htmlFor="filterType">{typeLabel}</label>
+            <select
+              id="filterType"
+              className="dash-select"
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+            >
+              <option value="">All {typeLabel}s</option>
+              {typeOptions.map((v) => <option key={v} value={v}>{v}</option>)}
+            </select>
 
-          <label htmlFor="filterSite">Location</label>
-          <select
-            id="filterSite"
-            className="dash-select"
-            value={siteFilter}
-            onChange={(e) => setSiteFilter(e.target.value)}
-          >
-            <option value="">All Locations</option>
-            {siteOptions.map((v) => <option key={v} value={v}>{v}</option>)}
-          </select>
+            <label htmlFor="filterSite">Location</label>
+            <select
+              id="filterSite"
+              className="dash-select"
+              value={siteFilter}
+              onChange={(e) => setSiteFilter(e.target.value)}
+            >
+              <option value="">All Locations</option>
+              {siteOptions.map((v) => <option key={v} value={v}>{v}</option>)}
+            </select>
 
-          <button
-            type="button"
-            className="btn-ghost"
-            onClick={() => { setTypeFilter(''); setSiteFilter(''); }}
-          >
-            Reset filters
-          </button>
-        </div>
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={() => { setTypeFilter(''); setSiteFilter(''); }}
+            >
+              Reset filters
+            </button>
+          </div>
         )}
       </div>
 

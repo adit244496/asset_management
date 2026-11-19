@@ -2,7 +2,7 @@ import { formatIfDate } from '../lib/dates';
 import { columnsFor, groupsFor } from '../lib/schema';
 import { useAssets } from '../context/AssetsContext';
 import { NOT_RECORDED, isNotRecorded } from '../lib/notRecorded';
-import { WARRANTY_LABELS, daysUntilExpiry, warrantyState } from '../lib/warranty';
+import { WARRANTY_LABELS, daysUntilExpiry, licenceExpired, warrantyState } from '../lib/warranty';
 import SecretSerial from './SecretSerial';
 import StatusBadge from './StatusBadge';
 import './AssetDetail.css';
@@ -41,16 +41,27 @@ const AssetDetail = ({ asset, omit = [] }) => {
   const software = reg === 'software';
   const warranty = software ? renewalNote(asset) : warrantyNote(asset);
   const hidden = new Set(omit);
+  // A software is Active until its Renewal Date has passed, then Expired (and
+  // it can no longer be edited -- see warranty.editLockedAsExpired).
+  const expired = software && licenceExpired(asset);
 
   return (
-    <div className="asset-detail">
+    <div className={`asset-detail${expired ? ' is-expired' : ''}`}>
       <div className="asset-detail-head">
         <div className="asset-detail-identity">
           <div className="asset-detail-id">{asset.assetId}</div>
           <h2>{asset.assetTag || asset.model}</h2>
         </div>
         <div className="asset-detail-badges">
-          <StatusBadge status={asset.status} />
+          {software ? (
+            <span className={`licence-state ${expired ? 'is-expired' : 'is-active'}`}
+              title={expired ? 'Its Renewal Date has passed' : 'Its Renewal Date has not passed'}>
+              <span className="licence-state-dot" />
+              {expired ? 'EXPIRED' : 'ACTIVE'}
+            </span>
+          ) : (
+            <StatusBadge status={asset.status} />
+          )}
           {asset.isDeleted && <span className="pill pill-bad">Deleted</span>}
           <span className={`pill pill-${warranty.tone}`}>{warranty.text}</span>
         </div>
@@ -69,7 +80,7 @@ const AssetDetail = ({ asset, omit = [] }) => {
                   <dt>{col.label}</dt>
                   <dd>
                     {col.key === 'status'
-                      ? <StatusBadge status={asset.status} />
+                      ? <StatusBadge status={asset.status} record={asset} register={reg} />
                       : (isNotRecorded(asset[col.key])
                         ? <span className="asset-detail-empty">{NOT_RECORDED}</span>
                         : (col.key === 'srl'

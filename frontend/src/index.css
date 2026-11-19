@@ -758,3 +758,8 @@ table.data-table .table-empty {
 .field-error-inline {
   color: var(--critical, #dc2626);
 }
+
+/* A hint that warns about what saving will do (e.g. removing a serial number). */
+.field-hint.field-warn-inline {
+  color: var(--warning, #b45309);
+}

@@ -24,11 +24,10 @@ const KIND_BY_FIELD = {
   status: 'status',
   linkedPeripherals: 'linked',
   linkedAsset: 'linked',
-  vendor: 'reassigned',
 };
 
 const WHOLE_ITEM_ACTIONS = new Set([
-  'created', 'imported', 'deleted', 'restored', 'verified', 'rejected', 'discarded',
+  'created', 'imported', 'deleted', 'restored', 'verified', 'rejected', 'discarded', 'purged',
 ]);
 
 export function kindOf(event, register) {
@@ -125,6 +124,7 @@ const HEADLINES = {
   verified: 'Verified into the register',
   rejected: 'Sent back for correction',
   discarded: 'Discarded before verification',
+  purged: 'Deleted permanently',
 };
 
 export function groupHeadline(group) {
@@ -143,7 +143,7 @@ export function groupHeadline(group) {
 
 const LEAD_FIELDS = {
   moved: ['site', 'location', 'floor'],
-  reassigned: ['user', 'vendor', 'department', 'email'],
+  reassigned: ['user', 'department', 'email'],
 };
 
 export function groupLead(group) {

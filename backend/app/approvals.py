@@ -78,6 +78,8 @@ def settings_dict(row: NotificationSettings) -> dict[str, Any]:
         "mode": row.mode,
         "itHeadEmail": row.it_head_email or "",
         "ccEmails": row.cc_emails or "",
+        "softwareHeadEmail": getattr(row, "software_head_email", None) or "",
+        "softwareCcEmails": getattr(row, "software_cc_emails", None) or "",
         "smtpHost": row.smtp_host or "",
         "smtpPort": row.smtp_port or 587,
         "smtpSecurity": row.smtp_security or "starttls",
@@ -132,6 +134,22 @@ def update_settings(db: Session, data: dict, username: str) -> tuple[Optional[No
         errors.append("The IT head's email holds too many addresses (255 characters at most) -- "
                       "use a distribution list for a long one.")
     cc = text("ccEmails", row.cc_emails, 4000)
+    sw_head = text("softwareHeadEmail", getattr(row, "software_head_email", None), 4000)
+    sw_heads = mailer.split_addresses(sw_head)
+    for addr in sw_heads:
+        if not crud.EMAIL_RE.match(addr):
+            errors.append(f"{addr!r} in the software head's email is not a valid email address.")
+    sw_head = ", ".join(sw_heads) or None
+    if len(sw_head or "") > 255:
+        errors.append("The software head's email holds too many addresses (255 characters at most) -- "
+                      "use a distribution list for a long one.")
+    sw_cc = text("softwareCcEmails", getattr(row, "software_cc_emails", None), 4000)
+    for addr in mailer.split_addresses(sw_cc):
+        if not crud.EMAIL_RE.match(addr):
+            errors.append(f"{addr!r} in Software also inform is not a valid email address.")
+    if len(", ".join(mailer.split_addresses(sw_cc))) > 1000:
+        errors.append("Software also inform holds too many addresses (1000 characters at most) -- "
+                      "use a distribution list for a long one.")
     host = text("smtpHost", row.smtp_host)
     username_ = text("smtpUsername", row.smtp_username)
     sender = text("fromAddress", row.from_address)
@@ -202,10 +220,15 @@ def update_settings(db: Session, data: dict, username: str) -> tuple[Optional[No
                                         ("new registration", registration_on),
                                         ("new joiner", joiner_on),
                                         ("software renewal", renewal_on)) if on]
+    hardware_on = [n for n in notices_on if n != "software renewal"]
+    if hardware_on and not it_head:
+        errors.append(f"Enter the IT head's email address (Assets & Peripherals) to turn on the "
+                      f"{', '.join(hardware_on)} email.")
+    if renewal_on and not sw_head:
+        errors.append("Enter the software head's email address (Software) to turn on the software "
+                      "renewal reminders.")
     if notices_on:
         names = ", ".join(notices_on)
-        if not it_head:
-            errors.append(f"Enter the IT head's email address to turn on the {names} email.")
         if not host or not (sender or username_):
             errors.append(f"Enter the mail server and the sender mailbox before turning on "
                           f"the {names} email.")
@@ -226,7 +249,11 @@ def update_settings(db: Session, data: dict, username: str) -> tuple[Optional[No
 
     if mode in ("inform", "approve"):
         if not it_head:
-            errors.append("Enter the IT head's email address before turning this on.")
+            errors.append("Enter the IT head's email address (Assets & Peripherals) before turning "
+                          "on scrap and sale emails.")
+        if not sw_head:
+            errors.append("Enter the software head's email address (Software) before turning on "
+                          "scrap and sale emails -- a software scrapped is reported to them.")
         if not host or not (sender or username_):
             errors.append("Enter the mail server and the sender mailbox before turning this on.")
     if mode == "approve" and not base:
@@ -237,6 +264,8 @@ def update_settings(db: Session, data: dict, username: str) -> tuple[Optional[No
 
     row.mode = mode
     row.it_head_email, row.cc_emails = it_head, ", ".join(mailer.split_addresses(cc)) or None
+    row.software_head_email = sw_head
+    row.software_cc_emails = ", ".join(mailer.split_addresses(sw_cc)) or None
     row.smtp_host, row.smtp_port, row.smtp_security = host, port, security
     row.smtp_username, row.from_address = username_, sender
     row.app_base_url = base.rstrip("/") if base else None
@@ -411,15 +440,22 @@ def _apply(db: Session, req: ApprovalRequest) -> tuple[str, str]:
             if is_sold(item.status):
                 skipped.append(f"{label}: it was sold, so it is not scrapped")
                 continue
-            crud.delete_asset(db, item, actor)
+            # Asked for with the request: scrap the asset's linked peripherals too.
+            crud.delete_asset(db, item, actor, scrap_linked=bool(changes.get("scrapLinkedPeripherals")),
+                              scrap_shared=bool(changes.get("scrapSharedPeripherals")))
         else:
             errors = crud.validate_asset_fields(dict(changes), partial=True, register=reg,
                                                 current_status=item.status, current=item)
             if errors:
                 skipped.append(f"{label}: {'; '.join(errors)}")
                 continue
-            crud.update_asset(db, item, dict(changes), actor)
-            if link_ids is not None and reg is registers.ASSETS:
+            # Selling: the asset's linked peripherals go to stock, or are scrapped if asked.
+            fields = {k: v for k, v in changes.items()
+                      if k not in ("scrapLinkedPeripherals", "scrapSharedPeripherals")}
+            crud.update_asset(db, item, fields, actor,
+                              scrap_linked=bool(changes.get("scrapLinkedPeripherals")),
+                              scrap_shared=bool(changes.get("scrapSharedPeripherals")))
+            if link_ids is not None and reg is registers.ASSETS and not is_sold(item.status):
                 crud.link_peripherals(db, item, link_ids, actor)
                 db.commit()
         done.append(label)
@@ -478,29 +514,47 @@ def _session():
     return SessionLocal()
 
 
-def inform_list(cfg: NotificationSettings) -> list[str]:
-    return mailer.split_addresses(cfg.cc_emails)
+# Two groups of recipients: Assets & Peripherals (it_head_email, cc_emails)
+# and Software (software_head_email, software_cc_emails). Every notice goes
+# to the group its records belong to.
+HARDWARE = "hardware"
+SOFTWARE = "software"
+GROUPS = (HARDWARE, SOFTWARE)
+GROUP_LABELS = {HARDWARE: "Assets & Peripherals", SOFTWARE: "Software"}
 
 
-def it_heads(cfg: Optional[NotificationSettings]) -> list[str]:
-    return mailer.split_addresses(getattr(cfg, "it_head_email", None))
+def group_of(register: Any) -> str:
+    """The recipient group of a register (or its key)."""
+    key = getattr(register, "key", register)
+    return SOFTWARE if key == registers.SOFTWARES.key else HARDWARE
 
 
-def it_head_label(cfg: Optional[NotificationSettings]) -> str:
-    heads = it_heads(cfg)
+def inform_list(cfg: NotificationSettings, group: str = HARDWARE) -> list[str]:
+    field = "software_cc_emails" if group == SOFTWARE else "cc_emails"
+    return mailer.split_addresses(getattr(cfg, field, None))
+
+
+def it_heads(cfg: Optional[NotificationSettings], group: str = HARDWARE) -> list[str]:
+    field = "software_head_email" if group == SOFTWARE else "it_head_email"
+    return mailer.split_addresses(getattr(cfg, field, None))
+
+
+def it_head_label(cfg: Optional[NotificationSettings], group: str = HARDWARE) -> str:
+    heads = it_heads(cfg, group)
+    title = "Software head" if group == SOFTWARE else "IT head"
     if not heads:
-        return "IT head"
-    return heads[0] if len(heads) == 1 else f"IT head ({', '.join(heads)})"[:150]
+        return title
+    return heads[0] if len(heads) == 1 else f"{title} ({', '.join(heads)})"[:150]
 
 
-def recipients(cfg: NotificationSettings, *people: Any) -> tuple[list[str], list[str]]:
+def recipients(cfg: NotificationSettings, *people: Any, group: str = HARDWARE) -> tuple[list[str], list[str]]:
     to: list[str] = []
-    for addr in (*it_heads(cfg), *people):
+    for addr in (*it_heads(cfg, group), *people):
         addr = str(addr or "").strip()
         if addr and crud.EMAIL_RE.match(addr) and addr.lower() not in {a.lower() for a in to}:
             to.append(addr)
     taken = {a.lower() for a in to}
-    return to, [a for a in inform_list(cfg) if a.lower() not in taken]
+    return to, [a for a in inform_list(cfg, group) if a.lower() not in taken]
 
 
 def _items_table(items: list[dict]) -> tuple[str, str]:
@@ -567,23 +621,31 @@ def send_request_email(request_id: str, inform: bool = True) -> None:
                 f"<a href='{html.escape(url)}?decision=reject' style='{btn};background:#b42318'>Reject</a></p>"
                 f"<p style='color:#555;font-size:12px'>Each link opens a page where you confirm. "
                 f"Links work once and expire in {TOKEN_DAYS} days.</p>")
-        try:
-            mailer.send(cfg, it_heads(cfg), subject, text, _wrap(body))
-            _log(db, f"Emailed the IT head for approval to {what}", req.id[:8])
-        except mailer.MailError as exc:
-            _log(db, f"Could not email the IT head for approval to {what}: {exc}", req.id[:8], ok=False)
+        group = group_of(req.register)
+        heads_to = it_heads(cfg, group)
+        who = "the software head" if group == SOFTWARE else "the IT head"
+        if not heads_to:
+            _log(db, f"Could not email {who} for approval to {what}: no address under "
+                     f"{GROUP_LABELS[group]} on Notifications", req.id[:8], ok=False)
+        else:
+            try:
+                mailer.send(cfg, heads_to, subject, text, _wrap(body))
+                _log(db, f"Emailed {who} for approval to {what}", req.id[:8])
+            except mailer.MailError as exc:
+                _log(db, f"Could not email {who} for approval to {what}: {exc}", req.id[:8], ok=False)
 
-        heads = {a.lower() for a in it_heads(cfg)}
-        others = [a for a in inform_list(cfg) if a.lower() not in heads]
+        heads = {a.lower() for a in heads_to}
+        others = [a for a in inform_list(cfg, group) if a.lower() not in heads]
         if not inform or not others:
             return
-        info_subject = f"Waiting for the IT head's approval: {what} ({req.requested_by})"
-        info_text = (f"{req.requested_by} has asked to {what}. It waits for the IT head's approval.\n"
+        title = "software head" if group == SOFTWARE else "IT head"
+        info_subject = f"Waiting for the {title}'s approval: {what} ({req.requested_by})"
+        info_text = (f"{req.requested_by} has asked to {what}. It waits for the {title}'s approval.\n"
                      + (f"Reason: {req.reason}\n" if req.reason else "")
                      + ("Changes: " + "; ".join(change_lines) + "\n" if change_lines else "")
                      + f"\n{text_items}\n\nNothing has been changed yet. You will be told the outcome.")
         info_body = (f"<p><b>{html.escape(req.requested_by)}</b> has asked to <b>{html.escape(what)}</b>. "
-                     "It waits for the IT head's approval.</p>"
+                     f"It waits for the {title}'s approval.</p>"
                      + (f"<p>Reason: {html.escape(req.reason)}</p>" if req.reason else "")
                      + ("<p>Changes: " + html.escape("; ".join(change_lines)) + "</p>" if change_lines else "")
                      + table
@@ -603,19 +665,20 @@ def send_outcome_email(request_id: str) -> None:
         if req is None or not mailer.configured(cfg):
             return
         to = [req.requested_by_email] if req.requested_by_email else []
-        cc = [a for a in mailer.split_addresses(cfg.cc_emails) if a not in to]
+        cc = [a for a in inform_list(cfg, group_of(req.register)) if a not in to]
         if not to and not cc:
             return
         what = _what(req, len(json.loads(req.items or "[]")))
         word = {APPROVED: "approved", REJECTED: "rejected", FAILED: "approved, but could not be applied"
                 }.get(req.status, req.status)
-        subject = f"IT head {word}: {what}"
+        title = "Software head" if group_of(req.register) == SOFTWARE else "IT head"
+        subject = f"{title} {word}: {what}"
         text = (f"The request by {req.requested_by} to {what} was {word}.\n"
-                + (f"Note from the IT head: {req.decision_note}\n" if req.decision_note else "")
+                + (f"Note from the {title}: {req.decision_note}\n" if req.decision_note else "")
                 + f"\n{req.outcome or ''}")
         body = (f"<p>The request by <b>{html.escape(req.requested_by)}</b> to {html.escape(what)} "
                 f"was <b>{html.escape(word)}</b>.</p>"
-                + (f"<p>Note from the IT head: {html.escape(req.decision_note)}</p>" if req.decision_note else "")
+                + (f"<p>Note from the {title}: {html.escape(req.decision_note)}</p>" if req.decision_note else "")
                 + f"<p>{html.escape(req.outcome or '')}</p>")
         try:
             mailer.send(cfg, to or cc, subject, text, _wrap(body), cc=cc if to else None)
@@ -632,7 +695,8 @@ def notify_done(kind: str, register, items: list, username: str, reason: str = "
 def _send_done_email(kind: str, register_key: str, items: list[dict], username: str, reason: str) -> None:
     with _session() as db:
         cfg = get_settings(db)
-        if cfg.mode != "inform" or not cfg.it_head_email:
+        group = group_of(register_key)
+        if cfg.mode != "inform" or not it_heads(cfg, group):
             return
         reg = registers.by_key(register_key)
         n = len(items)
@@ -643,10 +707,10 @@ def _send_done_email(kind: str, register_key: str, items: list[dict], username: 
         text = f"{username} {what}.\n" + (f"Reason: {reason}\n" if reason else "") + f"\n{text_items}"
         body = (f"<p><b>{html.escape(username)}</b> {html.escape(what)}.</p>"
                 + (f"<p>Reason: {html.escape(reason)}</p>" if reason else "") + table)
-        to, cc = recipients(cfg)
+        to, cc = recipients(cfg, group=group)
         try:
             mailer.send(cfg, to, subject, text, _wrap(body), cc=cc)
-            _log(db, f"Emailed the IT head: {username} {what}")
+            _log(db, f"Emailed the {GROUP_LABELS[group]} group: {username} {what}")
         except mailer.MailError as exc:
             _log(db, f"Could not email the IT head that {username} {what}: {exc}", ok=False)
 
@@ -659,19 +723,36 @@ def _scrapped_and_sold_since(db: Session, since: datetime) -> list[dict]:
     ).scalars().all()
     out = []
     for e in rows:
+        group = group_of(e.register)
         if e.action == crud.EVENT_DELETED:
-            out.append({"what": "Scrapped", "id": e.asset_number, "by": e.actor, "at": e.at})
+            out.append({"what": "Scrapped", "id": e.asset_number, "by": e.actor, "at": e.at, "group": group})
         elif is_sold(e.new_value) and not is_sold(e.old_value):
-            out.append({"what": "Sold", "id": e.asset_number, "by": e.actor, "at": e.at})
+            out.append({"what": "Sold", "id": e.asset_number, "by": e.actor, "at": e.at, "group": group})
     return out
 
 
 def send_summary(db: Session, cfg: NotificationSettings, now: datetime) -> bool:
+    """One daily summary per recipient group, each about its own records only."""
     since = now - timedelta(hours=24)
     pending = _pending(db) if cfg.mode == "approve" else []
     decided = [r for r in db.execute(select(ApprovalRequest).where(
         ApprovalRequest.decided_at >= _bound(db, since))).scalars().all()]
     changes = _scrapped_and_sold_since(db, since)
+    sent = False
+    for group in GROUPS:
+        if not it_heads(cfg, group):
+            continue
+        if _send_group_summary(
+                db, cfg, now, group,
+                [r for r in pending if group_of(r.register) == group],
+                [r for r in decided if group_of(r.register) == group],
+                [c for c in changes if c["group"] == group]):
+            sent = True
+    return sent
+
+
+def _send_group_summary(db: Session, cfg: NotificationSettings, now: datetime, group: str,
+                        pending: list, decided: list, changes: list) -> bool:
     if not pending and not decided and not changes:
         return False
 
@@ -704,10 +785,11 @@ def send_summary(db: Session, cfg: NotificationSettings, now: datetime) -> bool:
                         f"{html.escape(c['by'] or '')} ({_local(c['at'])})</li>")
         body.append("</ul>")
 
-    subject = f"IT assets: daily summary for {to_ist(now).strftime(DAY)}"
-    mailer.send(cfg, it_heads(cfg), subject, "\n".join(text), _wrap("".join(body)))
-    heads = {a.lower() for a in it_heads(cfg)}
-    cc = [a for a in mailer.split_addresses(cfg.cc_emails) if a.lower() not in heads]
+    subject = (f"{'Software' if group == SOFTWARE else 'IT assets'}: daily summary for "
+               f"{to_ist(now).strftime(DAY)}")
+    mailer.send(cfg, it_heads(cfg, group), subject, "\n".join(text), _wrap("".join(body)))
+    heads = {a.lower() for a in it_heads(cfg, group)}
+    cc = [a for a in inform_list(cfg, group) if a.lower() not in heads]
     if cc:
         no_links = [b for b in body if "review</a>" not in b]
         mailer.send(cfg, cc, subject, "\n".join(t for t in text if "/approve/" not in t),
@@ -724,7 +806,9 @@ def claim_summary_day(db: Session, today: str) -> bool:
 
 
 def summary_due(cfg: NotificationSettings, now_local: datetime) -> bool:
-    if cfg is None or cfg.mode == "off" or not cfg.summary_enabled or not cfg.it_head_email:
+    if cfg is None or cfg.mode == "off" or not cfg.summary_enabled:
+        return False
+    if not any(it_heads(cfg, g) for g in GROUPS):
         return False
     if not mailer.configured(cfg):
         return False
@@ -745,7 +829,7 @@ def run_summary_if_due(now: Optional[datetime] = None) -> None:
         try:
             sent = send_summary(db, cfg, now)
             if sent:
-                _log(db, "Emailed the daily summary to the IT head")
+                _log(db, "Emailed the daily summary")
         except mailer.MailError as exc:
             _log(db, f"Could not email the daily summary: {exc}", ok=False)
 

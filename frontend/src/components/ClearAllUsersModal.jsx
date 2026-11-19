@@ -72,11 +72,16 @@ const ClearAllUsersModal = ({ total, onClose, onCleared }) => {
             </ul>
           </div>
 
-          <div className="field">
+          {/* Own form + hidden username, so the browser's password manager
+              does not fill the saved username into the page's search box. */}
+          <form className="field" autoComplete="on" onSubmit={(e) => e.preventDefault()}>
+            <input type="text" name="username" autoComplete="username" value={user?.username || ''}
+              readOnly hidden tabIndex={-1} aria-hidden="true" />
             <label htmlFor="clearUsersPassword">
               Password for {user?.username ? <strong>{user.username}</strong> : 'your account'}
             </label>
             <input
+              name="password"
               id="clearUsersPassword"
               className="field-input"
               type="password"
@@ -89,7 +94,7 @@ const ClearAllUsersModal = ({ total, onClose, onCleared }) => {
             <div className="field-hint">
               Confirming with your own password is what makes this deliberate.
             </div>
-          </div>
+          </form>
         </div>
 
         <div className="modal-foot">

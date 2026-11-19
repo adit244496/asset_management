@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  ArrowDownToLine, Building2, Calendar, ChevronDown, Copy, Cpu, Download, FileSpreadsheet,
+  Building2, Calendar, ChevronDown, Copy, Cpu, Download, FileSpreadsheet,
   HardDrive, Hash, History, IndianRupee, Keyboard, Laptop, Layers,
   Monitor, Mouse, Package, Paperclip, Pencil, Printer,
   QrCode, Repeat2, RotateCcw, ScanLine, Search, Server, Smartphone, Tablet,
-  Tag, Trash2, TrendingDown, Upload, User, UserPlus, SlidersHorizontal, X
+  Tag, Trash2, TrendingDown, Upload, User, SlidersHorizontal, X
 } from 'lucide-react';
 import api, { errorMessage } from '../api';
 import AssetModal from '../components/AssetModal';
@@ -14,12 +14,11 @@ import BulkEditModal from '../components/BulkEditModal';
 import DateInput from '../components/DateInput';
 import MultiHistoryModal from '../components/MultiHistoryModal';
 import MultiSelectFilter from '../components/MultiSelectFilter';
+import PageJump from '../components/PageJump';
 import PermanentDeleteModal from '../components/PermanentDeleteModal';
 import QrCodesModal from '../components/QrCodesModal';
 import RegisterToggle from '../components/RegisterToggle';
 import RestoreModal from '../components/RestoreModal';
-import SoftwareMoveModal from '../components/SoftwareMoveModal';
-import { isInStock as isInStockStatus } from '../lib/inventory';
 import ScanSerialsModal from '../components/ScanSerialsModal';
 import SecretSerial from '../components/SecretSerial';
 import StatusBadge from '../components/StatusBadge';
@@ -35,7 +34,9 @@ import {
   NORMAL, ariaSort, nextSort, sortGlyph, sortHint, sortRows,
 } from '../lib/reportSort';
 import { useLongPress } from '../lib/longPress';
-import { ASSET, SOFTWARE } from '../lib/registers';
+import { EXPIRED_EDIT_NOTE, editLockedAsExpired } from '../lib/warranty';
+import { shownUsage } from '../lib/softwareUsage';
+import { ASSET, PERIPHERAL, SOFTWARE } from '../lib/registers';
 import {
   byKey, cloneAsset, COLUMNS, columnsFor, isNumericColumn, reportColumnsFor,
 } from '../lib/schema';
@@ -232,7 +233,14 @@ const ReportPage = () => {
   const [historyRecords, setHistoryRecords] = useState(null);
   const [purging, setPurging] = useState(null);
   const [restoring, setRestoring] = useState(null);
-  const [moving, setMoving] = useState(null);
+  // Scrapping assets with linked peripherals: { list, resolve } while asking
+  // whether those go to stock or are scrapped too.
+  const [linkedChoice, setLinkedChoice] = useState(null);
+  const [scrapSharedTick, setScrapSharedTick] = useState(false);
+  const answerLinked = (mode) => {
+    linkedChoice?.resolve(mode ? { mode, shared: mode === 'scrap' && scrapSharedTick } : null);
+    setLinkedChoice(null);
+  };
 
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
@@ -423,6 +431,11 @@ const ReportPage = () => {
 
   const selectAllMatching = () => setSelected(new Set(sorted.map((r) => r.id)));
   const clearSelection = () => setSelected(new Set());
+  // The rows as shown, for the export: an expired software has no Usage.
+  const shownRows = () => (isSoftware ? sorted.map((r) => ({ ...r, status: shownUsage(r, register) })) : sorted);
+  // Expired software cannot be edited, so Edit selected waits until they are unticked.
+  const expiredSelected = isSoftware
+    ? assets.filter((r) => selected.has(r.id) && editLockedAsExpired(r, register)).length : 0;
 
   const startScan = () => {
     const queue = sorted.filter((r) => selected.has(r.id));
@@ -476,11 +489,55 @@ const ReportPage = () => {
     const undo = isSuperadmin
       ? 'each one can be restored from its own row.'
       : 'but only a superadmin can restore a scrapped record.';
+    // What happens to the links: an asset's peripherals go to stock; a
+    // peripheral comes off its asset. Restoring does not link them again.
+    const linkedTo = live.map((r) => String((register === ASSET ? r.linkedPeripheralsText : r.linkedAssetText) || '').trim())
+      .filter(Boolean);
+    // Assets with linked peripherals: send those to stock, or scrap them too?
+    // A shared peripheral also on assets not being scrapped is listed apart:
+    // it can be scrapped as well, which takes it off all those assets.
+    let scrapLinked = false;
+    let scrapShared = false;
+    const sharedOthers = [];
+    if (register === ASSET && linkedTo.length) {
+      const scrapping = new Set(live.map((r) => r.id));
+      const seen = new Set();
+      live.forEach((r) => (r.linkedPeripherals || []).forEach((p) => {
+        if (!p?.id || seen.has(p.id)) return;
+        seen.add(p.id);
+        const others = assets.filter((a) => a && !a.isDeleted && !scrapping.has(a.id)
+          && (a.linkedPeripherals || []).some((x) => x.id === p.id)).map((a) => a.assetId);
+        if (others.length) sharedOthers.push(`${p.label || p.assetId} (also on ${others.join(', ')})`);
+      }));
+      setScrapSharedTick(false);
+      const choice = await new Promise((resolve) => setLinkedChoice({
+        list: linkedTo.join(', '), shared: sharedOthers, resolve,
+      }));
+      if (!choice) return;
+      scrapLinked = choice.mode === 'scrap';
+      scrapShared = scrapLinked && choice.shared;
+    }
+    // Shared peripherals are only mentioned when the selection has some.
+    const sharedNote = !sharedOthers.length ? '.'
+      : scrapShared
+        ? ` — shared ones included, taken off the other assets they are on: ${sharedOthers.join('; ')}.`
+        : `, except shared ones still on other assets, which only come off this one: ${sharedOthers.join('; ')}.`;
+    const linkNote = !linkedTo.length ? ''
+      : register === ASSET
+        ? (scrapLinked
+          ? `\n\nLinked peripherals (${linkedTo.join(', ')}) will be scrapped too${sharedNote}`
+          : `\n\nLinked peripherals (${linkedTo.join(', ')}) will be unlinked and sent to stock`
+          + (sharedOthers.length
+            ? `, except shared ones still on other assets, which only come off this one: ${sharedOthers.join('; ')}.`
+            : '.'))
+        : register === PERIPHERAL
+          ? `\n\n${live.length === 1 ? 'It' : 'They'} will be unlinked from ${linkedTo.join(', ')}.`
+          : '';
 
     let reason = '';
     if (notifyMode === 'approve') {
       const answer = window.prompt(
-        `Scrap ${what}?${soldNote}\n\nThis needs the IT head's approval. They will be emailed, and `
+        `Scrap ${what}?${soldNote}${linkNote}\n\nThis needs the IT head's approval. They will be emailed, and `
         + 'nothing is scrapped until they approve. Give a reason for them to read:',
         '',
       );
@@ -491,12 +548,13 @@ const ReportPage = () => {
         + `The record${live.length === 1 ? ' is' : 's are'} kept in the register and marked `
         + `INACTIVE — nothing is erased, ${undo}`
         + soldNote
+        + linkNote
         + (notifyMode === 'inform' ? '\n\nThe IT head will be emailed about it.' : '');
       if (!window.confirm(message)) return;
     }
 
     try {
-      const res = await deleteAssets(ids, reason);
+      const res = await deleteAssets(ids, reason, { scrapLinked, scrapShared });
       if (res.approvalRequested) {
         setBanner({
           text: `Sent to the IT head for approval: scrap ${res.approvalRequested.count.toLocaleString('en-IN')} `
@@ -513,8 +571,27 @@ const ReportPage = () => {
       if (res.alreadyDeleted) parts.push(`${res.alreadyDeleted} already were`);
       if (res.skippedSold) parts.push(`${res.skippedSold} sold — not scrapped`);
       if (res.notFound) parts.push(`${res.notFound} no longer in the register`);
+      // Scrapping breaks peripheral links: an asset's peripherals go to stock,
+      // a peripheral is unlinked from its asset.
+      const toStock = res.peripheralsToStock || [];
+      const scrappedToo = res.peripheralsScrapped || [];
+      const unlinked = res.unlinked || [];
+      const listed = (list) => list.slice(0, 5).join(', ') + (list.length > 5 ? ` and ${list.length - 5} more` : '');
+      let links = '';
+      if (register === ASSET && (toStock.length || scrappedToo.length)) {
+        const offOthers = res.unlinkedFromOthers || [];
+        links = (scrappedToo.length
+          ? `Linked peripheral${scrappedToo.length === 1 ? '' : 's'} ${listed(scrappedToo)} scrapped too`
+          + (offOthers.length ? ` and taken off ${listed(offOthers)}` : '') + '. ' : '')
+          + (toStock.length
+            ? `Linked peripheral${toStock.length === 1 ? '' : 's'} ${listed(toStock)} sent to stock. ` : '');
+      } else if (register === ASSET && unlinked.length) {
+        links = `Linked peripherals unlinked (still on another asset, or already in stock): ${listed(unlinked)}. `;
+      } else if (register === PERIPHERAL && unlinked.length) {
+        links = `Unlinked from ${listed(unlinked)}. `;
+      }
       setBanner({
-        text: `${parts.join(', ')}. `
+        text: `${parts.join(', ')}. ${links}`
           + (isSuperadmin
             ? 'Restore any of them from its own row if that was a mistake.'
             : 'If that was a mistake, a superadmin can restore them.'),
@@ -713,14 +790,14 @@ const ReportPage = () => {
                   <button
                     type="button"
                     className="export-menu-item"
-                    onClick={() => { setExportMenuOpen(false); exportCSV(sorted, register); }}
+                    onClick={() => { setExportMenuOpen(false); exportCSV(shownRows(), register); }}
                   >
                     <FileSpreadsheet size={14} /> CSV
                   </button>
                   <button
                     type="button"
                     className="export-menu-item"
-                    onClick={() => { setExportMenuOpen(false); exportXLSX(sorted, register); }}
+                    onClick={() => { setExportMenuOpen(false); exportXLSX(shownRows(), register); }}
                   >
                     <FileSpreadsheet size={14} /> Excel
                   </button>
@@ -780,6 +857,8 @@ const ReportPage = () => {
               <Search size={14} className="report-search-icon" />
               <input
                 type="text"
+                name="report-search"
+                autoComplete="off"
                 className="report-search-input"
                 placeholder={fieldCol ? `Search ${fieldCol.label}…`
                   : isSoftware ? 'Search software, versions, serials, vendors...'
@@ -1001,19 +1080,25 @@ const ReportPage = () => {
                 <button
                   type="button"
                   className="btn-secondary bulk-edit-btn"
+                  disabled={expiredSelected > 0}
+                  title={expiredSelected > 0
+                    ? `${expiredSelected} of the selected ${expiredSelected === 1 ? 'has' : 'have'} expired and cannot be edited — untick ${expiredSelected === 1 ? 'it' : 'them'} first`
+                    : undefined}
                   onClick={() => setBulkEditing([...selected])}
                 >
                   <Layers size={14} /> Edit selected
                 </button>
               )}
-              <button
-                type="button"
-                className="btn-secondary bulk-qr-btn"
-                title="QR labels for the selected assets"
-                onClick={() => setQrIds(sorted.filter((r) => selected.has(r.id)).map((r) => r.id))}
-              >
-                <QrCode size={14} /> QR codes
-              </button>
+              {!isSoftware && (
+                <button
+                  type="button"
+                  className="btn-secondary bulk-qr-btn"
+                  title="QR labels for the selected assets"
+                  onClick={() => setQrIds(sorted.filter((r) => selected.has(r.id)).map((r) => r.id))}
+                >
+                  <QrCode size={14} /> QR codes
+                </button>
+              )}
               <button
                 type="button"
                 className="btn-secondary bulk-history-btn"
@@ -1025,7 +1110,8 @@ const ReportPage = () => {
               <button type="button" className="btn-primary bulk-scan-btn" onClick={startScan}>
                 <ScanLine size={14} /> Scan serial numbers
               </button>
-              {isAdmin && (
+              {/* Software is not scrapped (a superadmin can delete it permanently). */}
+              {isAdmin && !isSoftware && (
                 <button
                   type="button"
                   className="btn-danger bulk-delete-btn"
@@ -1141,8 +1227,9 @@ const ReportPage = () => {
                       <button
                         type="button"
                         className="icon-btn"
-                        title="Edit"
+                        title={editLockedAsExpired(row, register) ? EXPIRED_EDIT_NOTE : 'Edit'}
                         aria-label="Edit"
+                        disabled={editLockedAsExpired(row, register)}
                         onClick={() => setEditing(row)}
                       >
                         <Pencil size={13} />
@@ -1169,19 +1256,6 @@ const ReportPage = () => {
                     >
                       <History size={13} />
                     </button>
-
-                    {isSoftware && canWrite && !row.isDeleted && !row.pendingApproval
-                      && !/sold/i.test(String(row.status || '')) && (
-                        <button
-                          type="button"
-                          className="icon-btn"
-                          title={isInStockStatus(row.status) ? 'Assign from stock' : 'Move to stock'}
-                          aria-label={isInStockStatus(row.status) ? 'Assign from stock' : 'Move to stock'}
-                          onClick={() => setMoving({ row, action: isInStockStatus(row.status) ? 'assign' : 'stock' })}
-                        >
-                          {isInStockStatus(row.status) ? <UserPlus size={13} /> : <ArrowDownToLine size={13} />}
-                        </button>
-                      )}
 
                     {isSuperadmin && row.isDeleted && (
                       <button
@@ -1248,7 +1322,7 @@ const ReportPage = () => {
                             : formatDate(row.warrantyEnd)}
                           {days !== null && days < 0 && (
                             <span className="renewal-tag is-overdue" title="The renewal date has passed">
-                              Overdue
+                              Expired
                             </span>
                           )}
                           {days !== null && days >= 0 && days <= RENEWAL_SOON_DAYS && (
@@ -1320,9 +1394,10 @@ const ReportPage = () => {
                     }
 
                     if (col.key === 'status') {
+                      // An expired software shows no Usage (StatusBadge, via the record).
                       return (
                         <td key={col.key}>
-                          <StatusBadge status={row.status} />
+                          <StatusBadge status={row.status} record={row} register={register} />
                           {row.pendingApproval && (
                             <span
                               className="pending-approval-tag"
@@ -1415,9 +1490,12 @@ const ReportPage = () => {
             >
               Previous
             </button>
-            <span className="pagination-page-indicator">
-              Page {safePage} of {totalPages}
-            </span>
+            <PageJump
+              className="pagination-page-indicator"
+              page={safePage}
+              total={totalPages}
+              onGo={setPage}
+            />
             <button
               type="button"
               className="btn-page"
@@ -1477,21 +1555,58 @@ const ReportPage = () => {
           />
         )}
 
+        {linkedChoice && (
+          <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) answerLinked(null); }}>
+            <div className="modal modal-narrow" role="dialog" aria-labelledby="scrapLinkedTitle">
+              <div className="modal-head">
+                <h2 id="scrapLinkedTitle">Linked peripherals</h2>
+                <button type="button" className="modal-close" onClick={() => answerLinked(null)} title="Cancel">
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="modal-body">
+                <p>
+                  Being scrapped with linked peripherals: <strong>{linkedChoice.list}</strong>.
+                  What should happen to them?
+                </p>
+                <p className="field-hint">
+                  Send them to stock to use them again, or scrap them together with the asset.
+                </p>
+                {linkedChoice.shared?.length > 0 && (
+                  <label className="user-must-change scrap-shared-tick">
+                    <input type="checkbox" checked={scrapSharedTick}
+                      onChange={(e) => setScrapSharedTick(e.target.checked)} />
+                    <span>
+                      With <strong>Scrap them too</strong>, also scrap the shared
+                      peripheral{linkedChoice.shared.length === 1 ? '' : 's'} and unlink
+                      {linkedChoice.shared.length === 1 ? ' it' : ' them'} from every asset:
+                      {' '}{linkedChoice.shared.join('; ')}
+                      <span className="field-hint">
+                        Left unticked, a shared peripheral only comes off the asset being scrapped.
+                      </span>
+                    </span>
+                  </label>
+                )}
+              </div>
+              <div className="modal-foot">
+                <button type="button" className="btn-secondary" onClick={() => answerLinked(null)}>Cancel</button>
+                <button type="button" className="btn-danger scrap-linked-btn" onClick={() => answerLinked('scrap')}>
+                  Scrap them too
+                </button>
+                <button type="button" className="btn-primary stock-linked-btn" onClick={() => answerLinked('stock')} autoFocus>
+                  Send them to stock
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {restoring && (
           <RestoreModal
             row={restoring}
             noun={meta.one}
             onClose={() => setRestoring(null)}
             onRestored={handleRestored}
-          />
-        )}
-
-        {moving && (
-          <SoftwareMoveModal
-            record={moving.row}
-            action={moving.action}
-            onClose={() => setMoving(null)}
-            onDone={(text) => { setMoving(null); setBanner({ text, kind: 'success' }); }}
           />
         )}
       </div>

@@ -19,8 +19,8 @@ function normalizeAsset(raw) {
     'createdAt', 'updatedAt', 'createdBy', 'updatedBy', 'isDeleted', 'register',
     'linkedPeripherals', 'linkedAssets', 'previousStatus',
     'verification', 'verifiedBy', 'verifiedAt', 'verificationNote',
-    'acceptedBySapId',
     'srlMasked',
+    'expired',
     'lifecycle',
     'pendingApproval',
   ].forEach((k) => {
@@ -133,6 +133,8 @@ export function AssetsProvider({ children }) {
     syncMasters();
     const saved = normalizeAsset(res.data);
     if (res.data?.approvalRequested) saved.approvalRequested = res.data.approvalRequested;
+    // Sold now: what happened to its linked peripherals (to stock / scrapped).
+    if (res.data?.linkedReleased) saved.linkedReleased = res.data.linkedReleased;
     return saved;
   }, [base, refresh, syncMasters, forgetLinkedPeripherals]);
 
@@ -155,20 +157,14 @@ export function AssetsProvider({ children }) {
     return res.data;
   }, [base, refresh]);
 
-  const deleteAssets = useCallback(async (ids, reason = '') => {
-    const res = await api.post(`${base}/bulk-delete`, { ids, reason });
+  // scrapLinked (assets): scrap their linked peripherals too, instead of sending them to stock;
+  // scrapShared: including shared ones still on other assets (taken off all of them).
+  const deleteAssets = useCallback(async (ids, reason = '', { scrapLinked = false, scrapShared = false } = {}) => {
+    const res = await api.post(`${base}/bulk-delete`, {
+      ids, reason, ...(scrapLinked ? { scrapLinked: true } : {}), ...(scrapLinked && scrapShared ? { scrapShared: true } : {}),
+    });
     await refresh();
     return res.data;
-  }, [base, refresh]);
-
-  const moveSoftware = useCallback(async (id, body) => {
-    const res = await api.post(`${base}/${encodeURIComponent(id)}/move`, body);
-    await refresh();
-    return {
-      ...res.data,
-      record: normalizeAsset(res.data.record),
-      source: normalizeAsset(res.data.source),
-    };
   }, [base, refresh]);
 
   const restoreAsset = useCallback(async (id, status) => {
@@ -210,13 +206,15 @@ export function AssetsProvider({ children }) {
   }, [base, refresh]);
 
   const bulkImport = useCallback(async (
-    rowsToImport, dedupeKey, createUsers = false, unknownMasters = 'include',
+    rowsToImport, dedupeKey, createUsers = false, unknownMasters = 'include', typeCodes = null,
   ) => {
     const res = await api.post(`${base}/bulk`, {
       rows: rowsToImport,
       dedupeKey: dedupeKey || null,
       createUsers: Boolean(createUsers),
       unknownMasters,
+      // Abbreviations picked for the new types (shown before importing).
+      ...(typeCodes && Object.keys(typeCodes).length ? { typeCodes } : {}),
     });
     await refresh();
     syncMasters();
@@ -297,7 +295,6 @@ export function AssetsProvider({ children }) {
     deleteAssets,
     purgeAsset,
     restoreAsset,
-    moveSoftware,
     assetHistory,
     fetchRecord,
     registerHistory,
@@ -309,7 +306,7 @@ export function AssetsProvider({ children }) {
     filterOptionsFor,
     formOptionsFor,
   }), [register, setRegister, assets, loading, error, refresh, invalidateAll, createAsset, updateAsset,
-    updateAssets, deleteAsset, deleteAssets, purgeAsset, restoreAsset, moveSoftware, assetHistory, fetchRecord,
+    updateAssets, deleteAsset, deleteAssets, purgeAsset, restoreAsset, assetHistory, fetchRecord,
     registerHistory, lookupAsset, assetQrCodes, clearAllAssets, bulkImport, optionsFor,
     filterOptionsFor, formOptionsFor]);
 

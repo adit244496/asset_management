@@ -1,0 +1,29 @@
+.page-jump {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.page-jump-input {
+  height: 26px;
+  padding: 0 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-1);
+  color: var(--text-primary);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.page-jump-input:focus {
+  outline: none;
+  border-color: var(--accent, #2dd4bf);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent, #2dd4bf) 25%, transparent);
+}
+
+.page-jump-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

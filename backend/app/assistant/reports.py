@@ -121,7 +121,7 @@ GROUP_LABELS = {
     "type": "Type", "department": "Department", "company": "Company", "make": "Make",
     "model": "Model", "assigned_user": "Assigned user", "lifecycle": "New / replaced",
     "purchase_year": "Year bought", "age_band": "Age",
-    "name": "Software", "version": "Version", "vendor": "Vendor / used by",
+    "name": "Software", "version": "Version", "vendor": "Vendor name",
     "renewal_year": "Renewal year",
 }
 MEASURE_ENUM = ["count", "average_age", "total_seats", "total_value"]
@@ -280,7 +280,7 @@ def describe(spec: dict) -> str:
         parts.append(f'Matching "{spec["text"]}"')
     for key in FILTER_ATTRS:
         if spec.get(key):
-            parts.append(f"{'Vendor / used by' if key == 'vendor' else key.capitalize()}: {spec[key]}")
+            parts.append(f"{'Vendor name' if key == 'vendor' else key.capitalize()}: {spec[key]}")
     if spec.get("assigned_to"):
         parts.append(f'Assigned to "{spec["assigned_to"]}"')
     field = spec.get("date_field") or "none"

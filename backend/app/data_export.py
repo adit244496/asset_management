@@ -10,7 +10,7 @@ from typing import Any, Optional
 from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Session
 
-from app import crud, mailer, registers, xlsx
+from app import crud, mailer, registers, type_codes, xlsx
 from app.datefmt import DAY_TIME, DAY_TIME_SECONDS, display_date, now_ist, to_ist, today_ist
 from app.masters import MASTER_SPECS
 from app.models import NotificationSettings
@@ -139,9 +139,11 @@ def master_workbook(db: Session) -> tuple[bytes, dict]:
     sheets = []
     for spec in MASTER_SPECS:
         types = spec.key == "type"
-        header = [spec.label, "Description", "Active", "Order", *(["Shared"] if types else []), "In use"]
+        header = [spec.label, "Description", "Active", "Order",
+                  *(["Shared", "Used for"] if types else []), "In use"]
         rows = [[r["name"], r.get("description") or "", _yes_no(r.get("isActive")), r.get("sortOrder"),
-                 *([_yes_no(r.get("isShared"))] if types else []), r.get("inUse")]
+                 *([_yes_no(r.get("isShared")), type_codes.USE_LABELS.get(r.get("usedFor"), "Both")]
+                   if types else []), r.get("inUse")]
                 for r in items.get(spec.key, [])]
         sheets.append((spec.plural, [header, *rows], [28, 40] + [10] * (len(header) - 2), True))
     sheets.append(("Users", [[label for _, label in USER_SHEET_COLUMNS] + ["Active"],

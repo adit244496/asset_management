@@ -96,6 +96,8 @@ _NOTIFY_COLUMN_PATCHES = [
     ("last_export_try_on", "VARCHAR(10)", None),
     ("export_clear_activity", "BOOLEAN NOT NULL DEFAULT TRUE", None),
     ("activity_cleared_at", "VARCHAR(40)", None),
+    ("software_head_email", "VARCHAR(255)", None),
+    ("software_cc_emails", "VARCHAR(1000)", None),
 ]
 
 
@@ -130,7 +132,16 @@ def ensure_asset_columns() -> None:
     added = {reg: _add_missing_columns(reg.table, _register_column_patches(reg))
              for reg in ALL_REGISTERS}
     users_added = _add_missing_columns("users", _USER_COLUMN_PATCHES)
-    _add_missing_columns("notification_settings", _NOTIFY_COLUMN_PATCHES)
+    notify_added = _add_missing_columns("notification_settings", _NOTIFY_COLUMN_PATCHES)
+    if "software_head_email" in notify_added:
+        # Software notices now have their own recipients. They start as the
+        # addresses that received them until now, so nothing stops arriving;
+        # change them on Master Data > Notifications.
+        with engine.begin() as conn:
+            conn.execute(text("UPDATE notification_settings SET software_head_email = it_head_email, "
+                              "software_cc_emails = cc_emails"))
+        logger.warning("Software notifications now have their own recipients -- set to the current "
+                       "IT head and Also inform addresses. Change them on Master Data > Notifications.")
     _add_missing_columns("asset_events", _EVENT_COLUMN_PATCHES)
     _add_missing_columns("asset_types", _ASSET_TYPE_COLUMN_PATCHES)
 
@@ -231,11 +242,14 @@ def drop_sub_location() -> None:
         )
 
 
-_REGISTER_EXTRA_PATCHES: dict[str, list] = {}
+_REGISTER_EXTRA_PATCHES: dict[str, list] = {
+    "softwares": [("start_date", "VARCHAR(20)", None)],
+}
 
 _ASSET_TYPE_COLUMN_PATCHES = [
     ("is_shared", "BOOLEAN NOT NULL DEFAULT FALSE", None),
     ("code", "VARCHAR(10)", None),
+    ("used_for", "VARCHAR(12)", None),
 ]
 
 
@@ -331,9 +345,21 @@ def srl_index_exists(conn, index: str = SRL_UNIQUE_INDEX) -> bool:
 def ensure_srl_unique_index() -> None:
     from app.registers import ALL as ALL_REGISTERS
 
+    from app.registers import SOFTWARES
+
     tables = set(inspect(engine).get_table_names())
     for reg in ALL_REGISTERS:
         if reg.table not in tables:
+            continue
+
+        if reg is SOFTWARES:
+            # A software's Serial Number may be shared by several records,
+            # so the softwares table has no unique index on it.
+            with engine.begin() as conn:
+                if srl_index_exists(conn, reg.srl_index):
+                    conn.execute(text(f"DROP INDEX IF EXISTS {reg.srl_index}"))
+                    logger.warning("Dropped %s -- software Serial Numbers may now repeat.",
+                                   reg.srl_index)
             continue
 
         with engine.connect() as conn:
@@ -458,6 +484,11 @@ def create_app() -> Flask:
         for type_name, code in type_codes.ensure_codes(db):
             logger.warning("Gave Asset Type %r the abbreviation %s (new IDs: %s).",
                            type_name, code, type_codes.format_id(code, 1))
+        uses = type_codes.ensure_uses(db)
+        if uses:
+            logger.warning("Set which Data Entry offers each Asset Type, from the records using it: %s. "
+                           "See Master Data > Type.",
+                           ", ".join(f"{n} -> {type_codes.USE_LABELS[u]}" for n, u in uses))
 
         from app.registers import ALL as ALL_REGISTERS
         from app.registers import SOFTWARES

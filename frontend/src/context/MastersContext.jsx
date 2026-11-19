@@ -56,8 +56,14 @@ export function MastersProvider({ children }) {
     [loaded, items, listKey],
   );
 
+  // Asset Types carry "Used for" (asset / peripheral / both): Assets offer
+  // only asset types, Peripherals only peripheral types. Without a register
+  // (e.g. checking a value exists) every type is listed.
   const namesFor = useCallback(
-    (key, registerKey) => (items[listKey(key, registerKey)] || []).map((row) => row.name),
+    (key, registerKey) => (items[listKey(key, registerKey)] || [])
+      .filter((row) => key !== 'type' || !registerKey || !row.usedFor
+        || row.usedFor === 'both' || row.usedFor === registerKey)
+      .map((row) => row.name),
     [items, listKey],
   );
 

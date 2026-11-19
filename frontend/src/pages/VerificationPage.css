@@ -179,6 +179,10 @@ table.verify-table td.verify-desc {
   max-width: 220px;
 }
 
+table.verify-table td.verify-srl {
+  white-space: nowrap;
+}
+
 .verify-dop {
   font-variant-numeric: tabular-nums;
 }

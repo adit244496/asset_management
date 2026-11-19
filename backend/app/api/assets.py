@@ -47,6 +47,13 @@ def make_blueprint(register: Register) -> Blueprint:
         problem = approvals.first_frozen_error(db, items)
         return (jsonify({"detail": [problem], "code": "pending_approval"}), 409) if problem else None
 
+    def no_software_scrap():
+        # Software is not scrapped: an expired licence shows as Expired, and a
+        # superadmin can delete one permanently.
+        activity.note(summary="Refused: scrap a software")
+        return jsonify({"detail": ["Software cannot be scrapped. A superadmin can delete a software "
+                                   "permanently instead."], "code": "no_scrap"}), 422
+
     def selling(asset, status) -> bool:
         return (crud.is_verified(asset) and not asset.is_deleted
                 and approvals.is_sold(status) and not approvals.is_sold(asset.status))
@@ -157,6 +164,9 @@ def make_blueprint(register: Register) -> Blueprint:
             taken = crud.duplicate_srl_error(db, data, register=register)
             if taken:
                 errors = [*errors, taken]
+            wrong_type = crud.type_use_error(db, register, data)
+            if wrong_type:
+                errors = [*errors, wrong_type]
             link_ids, link_error = read_link_ids(data)
             if link_error:
                 errors = [*errors, link_error]
@@ -174,7 +184,6 @@ def make_blueprint(register: Register) -> Blueprint:
             body = serialize_one(db, asset)
             if links and links["missing"]:
                 body["linkWarning"] = link_warning(links)
-            body["acceptedBySapId"] = bool(settings.VERIFY_NEW_RECORDS and crud.has_sap_id(asset))
             return jsonify(body), 201
 
     @bp.route("/<asset_id>", methods=["GET"])
@@ -199,6 +208,9 @@ def make_blueprint(register: Register) -> Blueprint:
             asset = crud.get_asset(db, asset_id, register)
             if asset is None:
                 return jsonify({"detail": f"{Noun} not found"}), 404
+            if crud.software_expired(asset):
+                activity.note(target=asset.asset_id, summary="Refused: edit an expired software")
+                return jsonify({"detail": [crud.expired_edit_error(asset)], "code": "expired"}), 409
             if (asset.verification == crud.REJECTED and asset.created_by
                     and not crud.entered_by(asset, current_user.username)):
                 return jsonify({
@@ -214,6 +226,9 @@ def make_blueprint(register: Register) -> Blueprint:
             taken = crud.duplicate_srl_error(db, data, asset)
             if taken:
                 errors = [*errors, taken]
+            wrong_type = crud.type_use_error(db, register, data, asset)
+            if wrong_type:
+                errors = [*errors, wrong_type]
             link_ids, link_error = read_link_ids(data)
             if link_error:
                 errors = [*errors, link_error]
@@ -224,10 +239,20 @@ def make_blueprint(register: Register) -> Blueprint:
                 return refused
 
             sale = selling(asset, data.get("status"))
+            # Selling an asset: its linked peripherals go to stock -- or are
+            # scrapped, if asked (shared ones too with scrapShared).
+            scrap_linked = sale and is_assets and bool(data.get("scrapLinked"))
+            scrap_shared = scrap_linked and bool(data.get("scrapShared"))
             mode = approvals.current_mode(db) if sale else "off"
             if sale and mode == "approve":
                 held = {k: v for k, v in data.items()
                         if k in crud.ALL_FIELD_KEYS or k == "linkedPeripheralIds"}
+                if scrap_linked:
+                    on = [p.asset_id for p in crud.linked_peripherals(db, asset.id)]
+                    if on:
+                        held["scrapLinkedPeripherals"] = ", ".join(on)
+                        if scrap_shared:
+                            held["scrapSharedPeripherals"] = "yes"
                 req = approvals.create_request(
                     db, kind=approvals.SALE, register=register, items=[asset],
                     user=current_user, reason=data.get("approvalReason") or "", changes=held)
@@ -240,18 +265,15 @@ def make_blueprint(register: Register) -> Blueprint:
 
             holder_before = asset.user
             was_sent_back = asset.verification == crud.REJECTED
-            was_waiting = asset.verification != crud.VERIFIED
-            asset = crud.update_asset(db, asset, data, current_user.username)
-            accepted_now = was_waiting and asset.verification == crud.VERIFIED
-            if accepted_now:
-                joiners.check(db, [(asset, None)], current_user.username, skip_uploads=True)
-                notices.registered(db, [asset], current_user.username, "sap_id")
-            else:
-                joiners.check(db, [(asset, holder_before)], current_user.username)
+            asset = crud.update_asset(db, asset, data, current_user.username,
+                                      scrap_linked=scrap_linked, scrap_shared=scrap_shared)
+            joiners.check(db, [(asset, holder_before)], current_user.username)
             if was_sent_back and asset.verification == crud.PENDING:
                 notices.awaiting_verification(db, [asset], current_user.username, "resubmitted")
+            released = getattr(asset, "sale_released", None)
             links = None
-            if link_ids is not None:
+            # A sold asset keeps no peripherals: the form's link list is not re-applied.
+            if link_ids is not None and released is None and not crud.is_sold(asset.status):
                 links = crud.link_peripherals(db, asset, link_ids, current_user.username)
                 db.commit()
             if sale and mode == "inform":
@@ -259,7 +281,8 @@ def make_blueprint(register: Register) -> Blueprint:
             body = serialize_one(db, asset)
             if links and links["missing"]:
                 body["linkWarning"] = link_warning(links)
-            body["acceptedBySapId"] = accepted_now
+            if released is not None:
+                body["linkedReleased"] = released
             return jsonify(body)
 
     @bp.route("/<asset_id>/transfer", methods=["POST"])
@@ -324,45 +347,6 @@ def make_blueprint(register: Register) -> Blueprint:
             joiners.check(db, [(asset, holder_before)], current_user.username)
             notices.transferred(db, asset, was, current_user.username)
             return jsonify(serialize_one(db, asset))
-
-    @bp.route("/<asset_id>/move", methods=["POST"])
-    @token_required
-    @require_write
-    def move_software(current_user, asset_id):
-        if not is_software:
-            return jsonify({"detail": [f"Only software is moved this way; use Transfer for {register.plural}."]}), 404
-        data = request.get_json(silent=True) or {}
-        action = str(data.get("action") or "").strip().lower()
-        with get_db() as db:
-            item = crud.get_asset(db, asset_id, register)
-            if item is None:
-                return jsonify({"detail": f"{Noun} not found"}), 404
-            refused = waiting_error(item) or frozen(db, [item])
-            if refused:
-                return refused
-            problem = crud.software_move_error(item, action, data.get("quantity"))
-            if problem:
-                return jsonify({"detail": [problem]}), 422
-            quantity = int(str(data.get("quantity")).strip())
-            holder = None
-            if action == crud.MOVE_ASSIGN:
-                person = crud.get_user(db, str(data.get("userId") or "").strip())
-                if person is None or not person.is_active:
-                    return jsonify({"detail": ["Choose who it is assigned to, from the user directory."]}), 422
-                holder = person.full_name or person.username
-            result = crud.move_software(db, item, action, quantity, holder, current_user.username)
-            dest, source = result["record"], result["source"]
-            what = f"{quantity} of {item.asset_tag}"
-            summary = (f"Assigned {what} to {holder}" if action == crud.MOVE_ASSIGN
-                       else f"Moved {what} to stock")
-            activity.note(target=source.asset_id,
-                          summary=summary + (f" ({dest.asset_id})" if result["split"] else ""))
-            return jsonify({
-                "record": serialize_one(db, dest),
-                "source": serialize_one(db, source),
-                "split": result["split"],
-                "merged": result["merged"],
-            })
 
     def history_query(args):
         actions = [a.strip() for a in args.getlist("action") if a.strip()]
@@ -463,7 +447,19 @@ def make_blueprint(register: Register) -> Blueprint:
     def asset_history(current_user, asset_id):
         with get_db() as db:
             asset = crud.get_asset(db, asset_id, register)
-            if asset is None or hidden_from(current_user, asset):
+            if asset is None:
+                # Permanently deleted: its history is kept, so it is still shown,
+                # with what the record was (saved when it was deleted).
+                view = crud.deleted_record_view(db, asset_id, register)
+                if view is None:
+                    return jsonify({"detail": f"{Noun} not found"}), 404
+                events = crud.list_asset_events(db, asset_id, register=register)
+                return jsonify({
+                    "items": [crud.event_to_dict(e) for e in events],
+                    "total": len(events),
+                    "asset": view,
+                })
+            if hidden_from(current_user, asset):
                 return jsonify({"detail": f"{Noun} not found"}), 404
             events = crud.list_asset_events(db, asset.id, register=register)
             return jsonify({
@@ -512,6 +508,9 @@ def make_blueprint(register: Register) -> Blueprint:
             return jsonify({"detail": errors}), 422
 
         with get_db() as db:
+            wrong_type = crud.type_use_error(db, register, changes)
+            if wrong_type:
+                return jsonify({"detail": [wrong_type]}), 422
             assets = [a for a in (crud.get_asset(db, i, register) for i in ids)
                       if a is not None and crud.is_verified(a)]
             missing = len(ids) - len(assets)
@@ -524,6 +523,16 @@ def make_blueprint(register: Register) -> Blueprint:
             refused = frozen(db, live)
             if refused:
                 return refused
+            expired = [a for a in live if crud.software_expired(a)]
+            if expired:
+                ids_text = ", ".join(a.asset_id for a in expired[:10]) + (" …" if len(expired) > 10 else "")
+                return jsonify({
+                    "detail": [f"{len(expired)} of the selected {register.plural} "
+                               f"{'has' if len(expired) == 1 else 'have'} expired -- the Renewal Date has "
+                               f"passed -- and cannot be edited: {ids_text}. Untick "
+                               f"{'it' if len(expired) == 1 else 'them'} and try again."],
+                    "code": "expired",
+                }), 409
 
             sold_now = [a for a in live if selling(a, changes.get("status"))]
             mode = approvals.current_mode(db) if sold_now else "off"
@@ -562,6 +571,8 @@ def make_blueprint(register: Register) -> Blueprint:
     @token_required
     @require_admin
     def bulk_delete(current_user):
+        if is_software:
+            return no_software_scrap()
         data = request.get_json(silent=True) or {}
         ids = data.get("ids")
 
@@ -592,10 +603,22 @@ def make_blueprint(register: Register) -> Blueprint:
                 return refused
 
             reason = (data.get("reason") or "").strip()
+            # Assets only: scrap their linked peripherals too, instead of sending them to stock.
+            scrap_linked = bool(data.get("scrapLinked")) and is_assets
+            # ...including shared ones still on other assets (taken off all of them).
+            scrap_shared = scrap_linked and bool(data.get("scrapShared"))
             mode = approvals.current_mode(db)
             if mode == "approve":
+                held = {}
+                if scrap_linked:
+                    on = sorted({p.asset_id for a in live for p in crud.linked_peripherals(db, a.id)})
+                    if on:
+                        held = {"scrapLinkedPeripherals": ", ".join(on)}
+                        if scrap_shared:
+                            held["scrapSharedPeripherals"] = "yes"
                 req = approvals.create_request(db, kind=approvals.SCRAP, register=register,
-                                               items=live, user=current_user, reason=reason)
+                                               items=live, user=current_user, reason=reason,
+                                               changes=held)
                 activity.note(target=register.plural,
                               summary=f"Asked the IT head to approve scrapping {len(live)} "
                                       f"{register.plural}")
@@ -607,20 +630,38 @@ def make_blueprint(register: Register) -> Blueprint:
                     "approvalRequested": approvals.request_dict(req, with_items=False),
                 }), 202
 
+            to_stock, scrapped_too, unlinked, off_others = [], [], [], []
             for asset in live:
-                crud.delete_asset(db, asset, current_user.username)
+                crud.delete_asset(db, asset, current_user.username, scrap_linked=scrap_linked,
+                                  scrap_shared=scrap_shared)
+                released = getattr(asset, "scrap_released", None) or {}
+                to_stock += [i for i in released.get("toStock", []) if i not in to_stock]
+                scrapped_too += [i for i in released.get("scrapped", []) if i not in scrapped_too]
+                unlinked += [i for i in released.get("unlinked", []) if i not in unlinked]
+                off_others += [i for i in released.get("offOthers", []) if i not in off_others]
             if mode == "inform":
                 approvals.notify_done(approvals.SCRAP, register, live, current_user.username, reason)
 
             activity.note(
                 target=register.plural,
-                summary=f"Scrapped {len(live)} {register.plural} at once",
+                summary=f"Scrapped {len(live)} {register.plural} at once"
+                        + (f"; linked peripherals sent to stock: {', '.join(to_stock[:10])}" if to_stock else "")
+                        + (f"; linked peripherals scrapped too: {', '.join(scrapped_too[:10])}"
+                           if scrapped_too else "")
+                        + (f"; shared peripherals taken off {', '.join(off_others[:10])}"
+                           if off_others else "")
+                        + (f"; unlinked from {', '.join(unlinked[:10])}"
+                           if unlinked and register is registers.PERIPHERALS else ""),
             )
             return jsonify({
                 "deleted": len(live),
                 "alreadyDeleted": already,
                 "notFound": missing,
                 "skippedSold": len(sold),
+                "peripheralsToStock": to_stock,
+                "peripheralsScrapped": scrapped_too,
+                "unlinkedFromOthers": off_others,
+                "unlinked": unlinked,
             })
 
     @bp.route("/lookup", methods=["GET"])
@@ -644,6 +685,8 @@ def make_blueprint(register: Register) -> Blueprint:
     @bp.route("/qr", methods=["POST"])
     @token_required
     def asset_qr_codes(current_user):
+        if is_software:
+            return jsonify({"detail": ["QR labels are not made for software."]}), 404
         data = request.get_json(silent=True) or {}
         ids = data.get("ids")
 
@@ -694,6 +737,8 @@ def make_blueprint(register: Register) -> Blueprint:
     @token_required
     @require_admin
     def delete_asset(current_user, asset_id):
+        if is_software:
+            return no_software_scrap()
         with get_db() as db:
             asset = crud.get_asset(db, asset_id, register)
             if asset is None:
@@ -739,9 +784,23 @@ def make_blueprint(register: Register) -> Blueprint:
             if refused:
                 return refused
             was = crud.purge_asset(db, asset, current_user.username)
+            released = getattr(asset, "purge_released", None) or {}
+            to_stock = released.get("toStock") or []
+            unlinked = [i for i in released.get("unlinked") or [] if i not in to_stock]
+            tail = ""
+            if is_assets and to_stock:
+                tail += (f" Linked peripheral{'s' if len(to_stock) > 1 else ''} "
+                         f"{', '.join(to_stock)} sent to stock.")
+            if is_assets and unlinked:
+                tail += f" Unlinked (still on another asset, or not in use): {', '.join(unlinked)}."
+            if not is_assets and unlinked:
+                tail += f" Unlinked from {', '.join(unlinked)}."
+            activity.note(target=was, summary=f"Permanently deleted {was}." + tail)
             return jsonify({
                 "deleted": was,
-                "detail": f"{Noun} {was} was permanently deleted. Its history was kept.",
+                "peripheralsToStock": to_stock,
+                "unlinked": released.get("unlinked") or [],
+                "detail": f"{Noun} {was} was permanently deleted. Its history was kept." + tail,
             })
 
     @bp.route("", methods=["DELETE"])
@@ -797,10 +856,20 @@ def make_blueprint(register: Register) -> Blueprint:
             }), 422
 
         with get_db() as db:
+            # Abbreviations picked for types not in Master Data yet (shown and
+            # editable before the import): all checked first, nothing imported
+            # if one is unusable.
+            chosen = None
+            if register in registers.HARDWARE and unknown_masters == crud.UNKNOWN_INCLUDE:
+                from app import type_codes
+                chosen, problems = type_codes.check_chosen_codes(db, data.get("typeCodes"))
+                if problems:
+                    return jsonify({"detail": problems}), 422
             accepted: list = []
             added, skipped, errors, warnings, unknown, normalised = crud.bulk_import_assets(
                 db, rows, dedupe_key, current_user.username, register,
                 unknown_masters=unknown_masters, accepted_out=accepted,
+                type_codes_chosen=chosen,
             )
             notices.registered(db, accepted, current_user.username, "uploaded")
             notices.awaiting_verification(db, accepted, current_user.username, "uploaded")
@@ -837,8 +906,6 @@ def make_blueprint(register: Register) -> Blueprint:
                 "skipped": skipped,
                 "total": total,
                 "awaitingVerification": any(a.verification == crud.PENDING for a in accepted),
-                "acceptedBySapId": (sum(1 for a in accepted if crud.has_sap_id(a))
-                                    if settings.VERIFY_NEW_RECORDS else 0),
                 "accounts": accounts,
                 "errors": errors,
                 "warnings": warnings,

@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { errorMessage } from '../api';
 import { useAssets } from '../context/AssetsContext';
-import { isInStock, isInUse } from '../lib/inventory';
-import { ASSET, SOFTWARE } from '../lib/registers';
+import { useAuth } from '../context/AuthContext';
+import { isInStock, isInUse, usageOptions } from '../lib/inventory';
+import { ASSET, PERIPHERAL, SOFTWARE } from '../lib/registers';
 import { SERIAL_MASK, isSerialMask, revealSerial, useSerialAccess } from '../lib/serialAccess';
 import { columnsFor, groupsFor } from '../lib/schema';
 import AssignedUserField from './AssignedUserField';
@@ -16,11 +17,18 @@ const AssetForm = ({
   originalStatus = null,
   onlyFields = null,
   fieldLabels = null,
+  // Leave out the values the system works out itself (Asset ID, Site,
+  // Availability, Linked To); an asset's Link Peripherals stays (it is editable).
+  hideGenerated = false,
 }) => {
   const { formOptionsFor, register: current } = useAssets();
   const reg = register || current;
   const canRevealSerial = useSerialAccess();
-  const [keyHiddenAtStart] = useState(() => isSerialMask(values?.srl));
+  const { canEdit } = useAuth();
+  // The serial number the record had when this form opened (XXXX for a
+  // hidden software key). Emptying the box removes it -- with a warning here,
+  // and a confirmation when saving (AssetModal).
+  const [serialAtStart] = useState(() => String(values?.srl ?? '').trim());
   const [revealing, setRevealing] = useState(false);
   const [revealError, setRevealError] = useState('');
   const showSavedSerial = async () => {
@@ -34,7 +42,8 @@ const AssetForm = ({
       setRevealing(false);
     }
   };
-  const allColumns = columnsFor(reg);
+  const allColumns = columnsFor(reg).filter((c) => !hideGenerated || !c.generated
+    || (c.key === 'linkedPeripheralsText' && onLinkChange));
   const picked = onlyFields
     ? onlyFields.map((key) => allColumns.find((c) => c.key === key)).filter(Boolean)
     : allColumns;
@@ -162,19 +171,23 @@ const AssetForm = ({
 
     if (col.scannable) {
       // A software's saved serial number comes masked (XXXX): the box starts
-      // empty, and left empty the saved key is kept (the server ignores XXXX).
-      const hiddenKey = reg === SOFTWARE && col.key === 'srl' && isSerialMask(value);
+      // empty and, untouched, keeps the saved key (the server ignores XXXX).
+      // Emptying the box -- or "Remove it" for a hidden key -- removes it.
+      const isSerial = col.key === 'srl';
+      const hiddenKey = isSerial && reg === SOFTWARE && isSerialMask(value);
+      // Emptying a saved serial warns first -- except for software, whose
+      // Serial Number may simply be left blank.
+      const removing = isSerial && reg !== SOFTWARE && Boolean(serialAtStart) && !String(value ?? '').trim();
+      const savedShown = isSerialMask(serialAtStart) ? 'the saved serial number' : serialAtStart;
       return (
         <>
           <BarcodeInput
             id={id}
             value={hiddenKey ? '' : value}
             invalid={invalid}
-            placeholder={hiddenKey ? `Saved and hidden (${SERIAL_MASK}) — leave empty to keep it` : undefined}
-            onChange={(v) => onChange(col.key, col.key === 'srl'
-              // Emptied again: keep the saved (hidden) key rather than erase it.
-              ? (String(v ?? '').toUpperCase() || (reg === SOFTWARE && keyHiddenAtStart ? SERIAL_MASK : ''))
-              : v)}
+            placeholder={hiddenKey ? `Saved and hidden (${SERIAL_MASK}) — leave empty to keep it`
+              : (removing ? 'Empty — the serial number will be removed' : undefined)}
+            onChange={(v) => onChange(col.key, isSerial ? String(v ?? '').toUpperCase() : v)}
           />
           {hiddenKey && (
             <p className="field-hint">
@@ -187,7 +200,24 @@ const AssetForm = ({
                   </button>
                 </>
               )}
+              {canEdit && values.id && (
+                <>
+                  {' · '}
+                  <button type="button" className="link-btn" onClick={() => onChange(col.key, '')}>
+                    Remove it
+                  </button>
+                </>
+              )}
               {revealError && <span className="field-error-inline"> {revealError}</span>}
+            </p>
+          )}
+          {removing && (
+            <p className="field-hint field-warn-inline" role="alert">
+              {col.label} is empty — saving will remove {savedShown} from this record.
+              {' '}
+              <button type="button" className="link-btn" onClick={() => onChange(col.key, serialAtStart)}>
+                Undo
+              </button>
             </p>
           )}
         </>
@@ -195,6 +225,14 @@ const AssetForm = ({
     }
 
     if (col.type === 'select') {
+      // A software's Usage: In Use or In Stock only.
+      // Only assets are sold: a peripheral's Status does not offer SOLD
+      // (a record already sold keeps showing its value).
+      const options = reg === SOFTWARE && col.key === 'status'
+        ? usageOptions(formOptionsFor('status'), value)
+        : reg === PERIPHERAL && col.key === 'status'
+          ? formOptionsFor(col.key, value).filter((v) => !/sold/i.test(v) || v === value)
+          : formOptionsFor(col.key, value);
       return (
         <select
           id={id}
@@ -203,7 +241,7 @@ const AssetForm = ({
           onChange={(e) => onChange(col.key, e.target.value)}
         >
           <option value="">{`Select ${col.label}`}</option>
-          {formOptionsFor(col.key, value).map((v) => <option key={v} value={v}>{v}</option>)}
+          {options.map((v) => <option key={v} value={v}>{v}</option>)}
         </select>
       );
     }

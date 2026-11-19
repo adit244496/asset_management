@@ -2,10 +2,16 @@ export function serialKey(value) {
   return (value ?? '').toString().trim().toLowerCase();
 }
 
+// Software keys reach the browser masked as XXXX (lib/serialAccess.js), so
+// a masked value is never a real serial to compare: the server checks those
+// against the actual keys.
+const MASKED = 'xxxx';
+
 export function findSerialOwner(assets, value, selfId = null) {
   const key = serialKey(value);
-  if (!key) return null;
-  return (assets || []).find((a) => a && a.id !== selfId && serialKey(a.srl) === key) || null;
+  if (!key || key === MASKED) return null;
+  return (assets || []).find((a) => a && a.id !== selfId && !a.srlMasked
+    && serialKey(a.srl) !== MASKED && serialKey(a.srl) === key) || null;
 }
 
 export function serialTakenMessage(owner) {

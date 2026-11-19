@@ -125,6 +125,11 @@ class Software(RegisterItemBase):
     quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
     price: Mapped[str | None] = mapped_column(String(50), nullable=True)
     vendor: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # When the licence or subscription starts; its end is warranty_end (Renewal
+    # Date). Sorted last (sort_order): startup adds it at the end of an existing
+    # table, and a different column order would make ensure_register_column_order
+    # rebuild the table.
+    start_date: Mapped[str | None] = mapped_column(String(20), nullable=True, sort_order=1000)
 
 
 class PeripheralLink(Base):
@@ -314,6 +319,10 @@ class AssetType(MasterBase):
     # Unique (index made at startup by app.type_codes.ensure_codes).
     code: Mapped[str | None] = mapped_column(String(10), nullable=True, sort_order=101)
 
+    # Which Data Entry offers this type: "asset", "peripheral" or "both"
+    # (app.type_codes; set from the records using it when first added).
+    used_for: Mapped[str | None] = mapped_column(String(12), nullable=True, sort_order=102)
+
 
 class AssetStatus(MasterBase):
     __tablename__ = "asset_statuses"
@@ -392,6 +401,11 @@ class NotificationSettings(Base):
     last_export_on: Mapped[str | None] = mapped_column(String(10), nullable=True)
     last_export_try_on: Mapped[str | None] = mapped_column(String(10), nullable=True)
     export_clear_activity: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    # Software notices go to their own group; it_head_email / cc_emails are
+    # the Assets & Peripherals group (app.approvals.it_heads / inform_list).
+    software_head_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    software_cc_emails: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     activity_cleared_at: Mapped[str | None] = mapped_column(String(40), nullable=True)
 
 

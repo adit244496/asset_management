@@ -31,13 +31,15 @@ GUIDE = [
         "steps": [
             "Softwares is the third register, beside Assets and Peripherals. Choose Softwares "
             "with the switch at the top right of Dashboard, Report, History or Data Entry.",
-            "A software record holds only: Software Name, Version, Status, Serial Number, "
-            "Quantity (how many seats), PO Number, Renewal Date, Price (for the whole record), "
-            "Vendor / Used By (the vendor, or the person using it) and Comment. It has no "
-            "location, department or company.",
+            "A software record holds only: Software Name, Version, Usage (In Use or In Stock), "
+            "Serial Number, Quantity (how many seats), PO Number, Start Date, Renewal Date, "
+            "Price per License, Vendor Name and Comment. It has no location, department, "
+            "company or assigned person, and no QR label.",
+            "Its page shows Active, or Expired once the Renewal Date has passed -- an expired "
+            "software's page is greyed out.",
             "Its Software ID (SFT...) is shown under the name in Report.",
             "The Dashboard for Softwares shows the licences and seats, how many are in use and "
-            "in stock, renewals overdue, total licence value and vendors, with a Vendor / Used By filter.",
+            "in stock, renewals overdue, total licence value and vendors, with a Vendor Name filter.",
             "Spare licences (IN STOCK) are listed in Inventory under SOFTWARE.",
         ],
     },
@@ -81,7 +83,7 @@ GUIDE = [
             "want -- the export follows what is on screen.",
             "Use the export button above the grid and choose CSV or Excel.",
             "A Softwares export has the software's own columns: name, version, status, serial "
-            "number, quantity, PO number, renewal date, price, vendor / used by and comment.",
+            "number, quantity, PO number, renewal date, price per license, vendor name and comment.",
         ],
     },
     {
@@ -115,8 +117,6 @@ GUIDE = [
             "row, plus a Summary sheet with each record's count. Tick one or more records first to "
             "get only theirs (their full history); with nothing ticked it covers every record the "
             "list shows, on all pages, with the same filters.",
-            "For a software, seats assigned or returned to stock show there too, including "
-            "a record split off from another one.",
         ],
     },
     {
@@ -124,10 +124,11 @@ GUIDE = [
         "title": "Print QR labels",
         "roles": EVERYONE,
         "route": "/report",
-        "keywords": "qr label print sticker tag software licence",
+        "keywords": "qr label print sticker tag",
         "steps": [
-            "In Report, tick the records you want labels for -- assets, peripherals or softwares.",
+            "In Report, tick the assets or peripherals you want labels for.",
             "Choose QR labels in the bar that appears, check each label, then print.",
+            "Softwares have no QR labels.",
         ],
     },
     {
@@ -144,8 +145,8 @@ GUIDE = [
             "Choosing the Assigned User fills in their email and location for you.",
             "The new record then waits in Verification. It appears in Report, Inventory and "
             "the Dashboard only once someone has verified it.",
-            "A record entered with a SAP ID skips Verification and goes straight into the "
-            "register -- it is already booked in SAP.",
+            "This is so even with a SAP ID or serial number filled in -- every new asset and "
+            "peripheral is verified before it joins the register.",
         ],
     },
     {
@@ -157,28 +158,11 @@ GUIDE = [
         "steps": [
             "Open Data Entry and choose Softwares at the top right.",
             "Fill in Software Name and Status (both required), and whichever of Version, "
-            "Serial Number, Quantity (seats), PO Number, Renewal Date, Price and Vendor / "
-            "Used By you have. The Software ID (SFT...) is assigned when you save.",
+            "Serial Number, Quantity (seats), PO Number, Renewal Date, Price per License and Vendor "
+            "Name you have. The Software ID (SFT...) is assigned when you save.",
             "Many licences at once: use Bulk Upload on the same page with the Softwares "
             "template.",
             "Like any new entry, it waits in Verification until someone else verifies it.",
-        ],
-    },
-    {
-        "id": "move-software",
-        "title": "Assign software seats, or move them back to stock",
-        "roles": WRITERS,
-        "route": "/report",
-        "keywords": "software assign seats licence license stock return give allocate move quantity",
-        "steps": [
-            "Open Report, choose Softwares, and use the icon on the row -- Assign from stock "
-            "for a licence IN STOCK, Move to stock for one in use. The same buttons are on "
-            "the record's own page.",
-            "Enter how many seats, and for an assignment pick the person from the user "
-            "directory; their name goes into Vendor / Used By.",
-            "Moving all the seats changes the record itself. Moving some splits it: the "
-            "record keeps the rest, and the moved seats join that person's (or the stock's) "
-            "record for the same software, or become a new one. The price is split to match.",
         ],
     },
     {
@@ -227,9 +211,11 @@ GUIDE = [
         "steps": [
             "Open Verification in the top bar. Everything added from Data Entry -- typed in or "
             "imported -- waits here, and nowhere else, until it is verified.",
-            "An entry with a SAP ID does not wait: it goes straight into the register. Adding "
-            "a SAP ID to an entry that is waiting (with Edit) lets it in the same way.",
+            "That includes entries with a SAP ID or serial number -- having one does not let "
+            "an entry skip Verification, and adding one with Edit does not verify it.",
             "Check each entry. Click Verify on its row, or tick several and click Verify selected.",
+            "Whoever made an entry cannot verify it -- another verifier has to. A superadmin is "
+            "both maker and checker, and may verify their own entries too.",
             "If something is wrong, click Edit to correct it, or Send back with a reason so "
             "whoever entered it can fix it. Correcting a sent-back entry puts it back in the queue.",
             "Discard (admins and superadmins) removes an entry that should never have been "
@@ -263,9 +249,7 @@ GUIDE = [
             "Change the fields and save. Every change is recorded in the record's history.",
             "Setting the status to IN STOCK clears the assigned user and email.",
             "For a software you can edit any of its ten fields, such as Version, Quantity, "
-            "Price or Renewal Date. To give seats to someone or take them back, use Assign "
-            "from stock or Move to stock instead -- they update the status, the seats and "
-            "Vendor / Used By together.",
+            "Price per License or Renewal Date. Software is not assigned to people.",
         ],
     },
     {
@@ -293,7 +277,7 @@ GUIDE = [
             "Pick the destination location; the people list narrows to those who sit there.",
             "A peripheral that is in use moves onto an asset instead, and takes that "
             "asset's location.",
-            "Software is not transferred -- see Assign software seats, or move them back to stock.",
+            "Software is not transferred or assigned to people.",
         ],
     },
     {
@@ -308,7 +292,7 @@ GUIDE = [
             "assigned date start blank; status, location, floor, department and company are "
             "carried over and can be changed.",
             "Cloning a software leaves Software Name, Serial Number and Renewal Date blank, and "
-            "carries over Version, Status, Quantity, PO Number, Price, Vendor / Used By and Comment.",
+            "carries over Version, Status, Quantity, PO Number, Price per License, Vendor Name and Comment.",
         ],
     },
     {
@@ -318,9 +302,11 @@ GUIDE = [
         "route": "/report",
         "keywords": "scrap delete remove retire dispose software licence cancel",
         "steps": [
-            "In Report, tick the record(s) and choose Scrap.",
+            "In Report, tick the asset(s) or peripheral(s) and choose Scrap.",
             "The record is kept and marked SCRAP -- nothing is erased.",
             "Only a superadmin can restore a scrapped record or delete one permanently.",
+            "Software is not scrapped: an expired licence shows as Expired, and a superadmin "
+            "can delete a software permanently.",
         ],
     },
     {
@@ -346,6 +332,11 @@ GUIDE = [
             "Makes has one list for Assets and one for Peripherals -- pick one with the buttons "
             "under the tabs. The Make field on a record offers the list for its register.",
             "Add, rename or deactivate values. Renaming a value updates every record using it.",
+            "Type has two lists, Assets and Peripherals (buttons under the tabs): Data Entry for "
+            "Assets offers only asset types, and for Peripherals only peripheral types. Softwares "
+            "have no type.",
+            "A type cannot be edited or renamed once added. To change one, delete it and add it "
+            "again; a type still used by records cannot be deleted, so retire it and add the new one.",
             "Only a superadmin can delete a value, one at a time, and a value still in use cannot "
             "be deleted -- deactivate it instead.",
         ],
@@ -358,7 +349,7 @@ GUIDE = [
         "keywords": "master data all workbook excel sheet download upload backup restore repopulate every list users",
         "steps": [
             "Open Master Data. The buttons under the heading act on every list at once.",
-            "Download all saves one Excel workbook with a sheet per list -- Asset Types, Statuses, "
+            "Download all saves one Excel workbook with a sheet per list -- Types, Statuses, "
             "Departments, Companies, Locations, Floors, Asset Makes, Peripheral Makes -- giving "
             "each value's description, "
             "Active (Yes/No), Order, Shared on types, and how many records use it -- plus a "
@@ -423,7 +414,7 @@ GUIDE = [
             "The assistant answers questions about this app and its records only.",
             "In Answer only mode it looks things up and explains how to do them.",
             "In Can make changes mode (admins and superadmins) it can prepare an edit, "
-            "a transfer, or a software assignment or return to stock, for you to confirm. "
+            "or a transfer of an asset or peripheral, for you to confirm. "
             "Nothing changes until you press Confirm, "
             "and the change is made exactly as if you had made it yourself.",
             "Every change you confirm is recorded in the Activity Log and the record's history. "

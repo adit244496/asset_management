@@ -59,6 +59,24 @@
   color: var(--text-muted);
 }
 
+/* A permanently deleted record: its history is kept and shown. */
+.hist-detail-purged {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--critical-soft);
+  color: var(--critical);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.hist-detail-gone {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 .hist-detail-head .btn-secondary {
   display: inline-flex;
   align-items: center;

@@ -38,9 +38,9 @@ const SetPasswordPage = () => {
         <div className="setpw-icon"><KeyRound size={22} /></div>
         <h1>Choose your password</h1>
         <p className="setpw-sub">
-          Welcome, <strong>{user?.fullName || user?.username}</strong>. This account was
-          created for you with a password that everyone in your batch was given, so it
-          has to be replaced before you can use the register.
+          Welcome, <strong>{user?.fullName || user?.username}</strong>. The password you
+          signed in with was set by an administrator, so replace it with one only you
+          know before you use the register.
         </p>
 
         {error && <div className="banner banner-error">{error}</div>}

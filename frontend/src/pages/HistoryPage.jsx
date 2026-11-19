@@ -7,6 +7,7 @@ import {
 import api, { errorMessage } from '../api';
 import Banner from '../components/Banner';
 import DateInput from '../components/DateInput';
+import PageJump from '../components/PageJump';
 import RegisterToggle from '../components/RegisterToggle';
 import StatusBadge from '../components/StatusBadge';
 import { useAssets } from '../context/AssetsContext';
@@ -612,7 +613,7 @@ const HistoryPage = () => {
                     {!isSoftware && <td className="hist-muted hist-nowrap">{row.type || '—'}</td>}
                     <td>{row.assetTag || <span className="hist-gone">no longer in the register</span>}</td>
                     {!isSoftware && <td className="hist-muted">{row.model || '—'}</td>}
-                    <td>{row.status ? <StatusBadge status={row.status} /> : '—'}</td>
+                    <td>{row.status ? <StatusBadge status={row.status} record={row} register={register} /> : '—'}</td>
                     <td className="num-cell">{row.changes.toLocaleString('en-IN')}</td>
                     <td>
                       <span className={`hist-chip hist-chip-${row.lastAction}`}>
@@ -649,7 +650,7 @@ const HistoryPage = () => {
             <button type="button" onClick={() => setPage((p) => p - 1)} disabled={page <= 1}>
               Previous
             </button>
-            <span>Page {page.toLocaleString('en-IN')} of {totalPages.toLocaleString('en-IN')}</span>
+            <PageJump page={page} total={totalPages} onGo={setPage} />
             <button type="button" onClick={() => setPage((p) => p + 1)} disabled={page >= totalPages}>
               Next
             </button>

@@ -32,7 +32,7 @@ export const COLUMNS = [
   { key: 'make', label: 'Make', type: 'select', group: 'identification', required: false, filterType: 'select', width: 100, headerAliases: ['make', 'manufacturer', 'brand', 'oem', 'publisher'] },
 
   { key: 'description', label: 'Description', type: 'text', group: 'identification', required: true, filterType: 'text', width: 220, headerAliases: ['description'] },
-  { key: 'status', label: 'Status', type: 'select', group: 'identification', required: true, filterType: 'select', options: SEED_OPTIONS.status, width: 110, headerAliases: ['status'] },
+  { key: 'status', label: 'Status', type: 'select', group: 'identification', required: true, filterType: 'select', options: SEED_OPTIONS.status, width: 110, headerAliases: ['status', 'usage'] },
 
   { key: 'user', label: 'Assigned User', type: 'text', group: 'assignment', required: true, filterType: 'text', width: 160, onlyIn: ASSET, headerAliases: ['user'] },
   { key: 'email', label: 'Email ID', type: 'email', group: 'assignment', required: false, filterType: 'text', width: 200, onlyIn: ASSET, headerAliases: ['email id', 'email'] },
@@ -55,9 +55,10 @@ export const COLUMNS = [
   { key: 'linkedAssetText', label: 'Linked To', type: 'text', group: 'identification', required: false, filterType: 'text', width: 170, generated: true, onlyIn: PERIPHERAL, headerAliases: ['linked to', 'linked asset'] },
 
   { key: 'version', label: 'Version', type: 'text', group: 'identification', required: false, filterType: 'text', width: 110, onlyIn: SOFTWARE, maxLength: 100, headerAliases: ['version', 'software version', 'ver'] },
+  { key: 'startDate', label: 'Start Date', type: 'date', group: 'procurement', required: false, filterType: 'date', width: 120, onlyIn: SOFTWARE, headerAliases: ['start date', 'licence start', 'license start', 'subscription start', 'start', 'valid from', 'activation date', 'activated on'] },
   { key: 'quantity', label: 'Quantity', type: 'number', group: 'procurement', required: false, filterType: 'number', width: 90, onlyIn: SOFTWARE, headerAliases: ['quantity', 'qty', 'seats', 'licences', 'licenses', 'no of licences', 'no of licenses'] },
-  { key: 'price', label: 'Price', type: 'text', group: 'procurement', required: false, filterType: 'text', sortType: 'number', width: 110, onlyIn: SOFTWARE, maxLength: 50, headerAliases: ['price', 'cost', 'amount', 'value'] },
-  { key: 'vendor', label: 'Vendor / Used By', type: 'text', group: 'procurement', required: false, filterType: 'text', width: 170, onlyIn: SOFTWARE, maxLength: 255, headerAliases: ['vendor', 'vendor / used by', 'used by', 'who uses it', 'supplier', 'vendor or who uses it'] },
+  { key: 'price', label: 'Price per License', type: 'text', group: 'procurement', required: false, filterType: 'text', sortType: 'number', width: 130, onlyIn: SOFTWARE, maxLength: 50, headerAliases: ['price per license', 'price per licence', 'price', 'cost', 'amount', 'value'] },
+  { key: 'vendor', label: 'Vendor Name', type: 'text', group: 'procurement', required: false, filterType: 'text', width: 170, onlyIn: SOFTWARE, maxLength: 255, headerAliases: ['vendor name', 'vendor', 'vendor / used by', 'used by', 'who uses it', 'supplier', 'vendor or who uses it'] },
 
   { key: 'availability', label: 'Availability', type: 'text', group: 'identification', required: false, filterType: 'select', width: 110, generated: true, derivedFrom: 'Status', headerAliases: ['availability', 'available'] },
 ];
@@ -141,6 +142,8 @@ export function normalizeHeader(h) {
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const SERIAL_RE = /^[A-Za-z0-9-]+$/;
+// A peripheral's serial may also contain spaces.
+export const PERIPHERAL_SERIAL_RE = /^[A-Za-z0-9 -]+$/;
 
 const QUANTITY_RE = /^\d+(\.0+)?$/;
 const PRICE_RE = /^\d+(\.\d{1,2})?$/;
@@ -153,6 +156,7 @@ export function validateAsset(values, {
 } = {}) {
   const errors = {};
   const software = registerKey === SOFTWARE;
+  const serialRe = registerKey === PERIPHERAL ? PERIPHERAL_SERIAL_RE : SERIAL_RE;
   const released = !software && isInStock(values.status);
   const columns = registerKey === ASSET ? COLUMNS : columnsFor(registerKey);
   columns.forEach((col) => {
@@ -167,9 +171,11 @@ export function validateAsset(values, {
       errors[col.key] = 'A whole number, like 5';
     } else if (col.key === 'price' && value && !PRICE_RE.test(cleanPrice(value))) {
       errors[col.key] = 'An amount, like 12500 or 12500.50';
-    } else if (col.key === 'srl' && value && (!SERIAL_RE.test(value) || value.includes('--'))
+    } else if (col.key === 'srl' && value && (!serialRe.test(value) || value.includes('--'))
       && !(original && value.toUpperCase() === String(original.srl ?? '').trim().toUpperCase())) {
-      errors[col.key] = SERIAL_RE.test(value) ? 'No two hyphens in a row' : 'Letters, numbers and hyphens only';
+      errors[col.key] = !serialRe.test(value)
+        ? (registerKey === PERIPHERAL ? 'Letters, numbers, spaces and hyphens only' : 'Letters, numbers and hyphens only')
+        : 'No two hyphens in a row';
     } else if (col.type === 'date' && value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
       errors[col.key] = 'Use dd-mm-yyyy, a real date';
     } else if (col.digits && value && !new RegExp(`^\\d{${col.digits}}$`).test(value)
@@ -178,9 +184,25 @@ export function validateAsset(values, {
     }
   });
 
-  if (register && !errors.srl) {
+  // A serial identifies one device -- but a software's Serial Number may repeat.
+  if (register && !software && !errors.srl) {
     const owner = findSerialOwner(register, values.srl, selfId);
     if (owner) errors.srl = serialTakenMessage(owner);
+  }
+
+  // Software: Usage is In Use or In Stock (a record keeping an older value may
+  // still be saved), and the Start Date is not after the Renewal Date.
+  if (software) {
+    const usage = String(values.status ?? '').trim();
+    if (!errors.status && usage && !isInUse(usage) && !isInStock(usage)
+      && usage.toLowerCase() !== String(original?.status ?? '').trim().toLowerCase()) {
+      errors.status = 'In Use or In Stock';
+    }
+    const start = String(values.startDate ?? '').trim();
+    const renews = String(values.warrantyEnd ?? '').trim();
+    if (!errors.startDate && start && renews && start > renews) {
+      errors.startDate = 'Cannot be after the Renewal Date';
+    }
   }
 
   // Assigned Date: only set while In Use. Keeping the date a record already
@@ -205,7 +227,7 @@ export function emptyAsset(registerKey = ASSET) {
 // copied from the original, and every field of the cloned form is editable.
 export const CLONE_BLANK_KEYS = [
   'srl', 'sapId', 'assetTag', 'description', 'user', 'email',
-  'warrantyEnd', 'insuranceEnd', 'assignedDate', 'linkedPeripheralsText',
+  'warrantyEnd', 'insuranceEnd', 'assignedDate', 'linkedPeripheralsText', 'startDate',
 ];
 
 const CLONE_BLANK = new Set(CLONE_BLANK_KEYS);

@@ -227,6 +227,11 @@ const UsersPanel = () => {
                       />
                       {u.isActive ? 'Active' : 'Inactive'}
                     </span>
+                    {u.mustChangePassword && u.role !== 'assignee' && (
+                      <span className="users-pw-tag" title="Has not set their own password yet — will be asked at sign-in">
+                        Must set password
+                      </span>
+                    )}
                   </td>
                   <td>{fmtDate(u.createdAt)}</td>
                   <td className="actions-cell">

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
-  ArrowDownToLine, ArrowLeft, ArrowRightLeft, History, Link2, Pencil, QrCode, Tag, UserPlus,
+  ArrowLeft, ArrowRightLeft, History, Link2, Pencil, QrCode, Tag, UserPlus,
 } from 'lucide-react';
 import { errorMessage } from '../api';
 import AssetDetail from '../components/AssetDetail';
@@ -9,11 +9,11 @@ import AssetModal from '../components/AssetModal';
 import Banner from '../components/Banner';
 import QrCodesModal from '../components/QrCodesModal';
 import SellModal from '../components/SellModal';
-import SoftwareMoveModal from '../components/SoftwareMoveModal';
 import TransferModal from '../components/TransferModal';
 import { useAssets } from '../context/AssetsContext';
 import { useAuth } from '../context/AuthContext';
 import { isInStock } from '../lib/inventory';
+import { EXPIRED_EDIT_NOTE, editLockedAsExpired } from '../lib/warranty';
 import { REGISTER_TOPICS, useLiveTick } from '../lib/live';
 import { ASSET, PERIPHERAL, SOFTWARE, isRegisterKey, registerOf } from '../lib/registers';
 import './RecordPage.css';
@@ -32,7 +32,6 @@ const RecordPage = () => {
   const [editing, setEditing] = useState(false);
   const [transferring, setTransferring] = useState(false);
   const [selling, setSelling] = useState(false);
-  const [moving, setMoving] = useState(null);
   const [qrIds, setQrIds] = useState(null);
 
   const load = useCallback(async () => {
@@ -46,7 +45,7 @@ const RecordPage = () => {
 
   // Changes by others show here as they happen -- held while a dialog on this
   // record is open, so a half-filled form is never swapped out underneath.
-  const dialogOpen = Boolean(editing || transferring || selling || moving || qrIds);
+  const dialogOpen = Boolean(editing || transferring || selling || qrIds);
   const liveTick = useLiveTick(REGISTER_TOPICS, { paused: dialogOpen });
 
   useEffect(() => { load(); }, [load, liveTick]);
@@ -82,16 +81,6 @@ const RecordPage = () => {
           <ArrowLeft size={14} /> {meta.label}
         </Link>
         <div className="record-actions">
-          {canWrite && register === SOFTWARE && !record.isDeleted && !record.pendingApproval
-            && !/sold/i.test(String(record.status || '')) && (isInStock(record.status) ? (
-              <button type="button" className="btn-primary" onClick={() => setMoving('assign')}>
-                <UserPlus size={14} /> Assign
-              </button>
-            ) : (
-              <button type="button" className="btn-primary" onClick={() => setMoving('stock')}>
-                <ArrowDownToLine size={14} /> Move to stock
-              </button>
-            ))}
           {canWrite && register !== SOFTWARE && (spare ? (
             <button type="button" className="btn-primary" onClick={() => setTransferring(true)}>
               <UserPlus size={14} /> Assign
@@ -102,7 +91,9 @@ const RecordPage = () => {
             </button>
           ))}
           {canEdit && (
-            <button type="button" className="btn-secondary" onClick={() => setEditing(true)}>
+            <button type="button" className="btn-secondary" onClick={() => setEditing(true)}
+              disabled={editLockedAsExpired(record, register)}
+              title={editLockedAsExpired(record, register) ? EXPIRED_EDIT_NOTE : undefined}>
               <Pencil size={14} /> Edit
             </button>
           )}
@@ -111,9 +102,11 @@ const RecordPage = () => {
               <Tag size={14} /> Sell
             </button>
           )}
-          <button type="button" className="btn-secondary" onClick={() => setQrIds([record.id])}>
-            <QrCode size={14} /> QR label
-          </button>
+          {register !== SOFTWARE && (
+            <button type="button" className="btn-secondary" onClick={() => setQrIds([record.id])}>
+              <QrCode size={14} /> QR label
+            </button>
+          )}
           <Link className="btn-secondary record-trail-link" to={`/history/${encodeURIComponent(record.id)}`}>
             <History size={14} /> Full trail
           </Link>
@@ -197,19 +190,6 @@ const RecordPage = () => {
           onDone={(text, kind) => {
             setSelling(false);
             setBanner({ text, kind });
-            load();
-          }}
-        />
-      )}
-
-      {moving && (
-        <SoftwareMoveModal
-          record={record}
-          action={moving}
-          onClose={() => setMoving(null)}
-          onDone={(text) => {
-            setMoving(null);
-            setBanner({ text, kind: 'success' });
             load();
           }}
         />

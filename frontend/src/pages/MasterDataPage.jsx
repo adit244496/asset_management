@@ -20,6 +20,11 @@ import './MasterDataPage.css';
 const USERS_TAB = 'users';
 const NOTIFY_TAB = 'notifications';
 const SUB_LISTS = { floor: 'location' };
+const TYPE_VIEWS = [
+  { key: 'asset', label: 'Assets', one: 'Asset', other: 'peripherals' },
+  { key: 'peripheral', label: 'Peripherals', one: 'Peripheral', other: 'assets' },
+];
+const inTypeView = (row, view) => !row.usedFor || row.usedFor === 'both' || row.usedFor === view;
 
 const MasterDataPage = ({ initialTab = null }) => {
   const { categories, loaded, reload: reloadMasters } = useMasters();
@@ -35,13 +40,16 @@ const MasterDataPage = ({ initialTab = null }) => {
   const [downloading, setDownloading] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [filter, setFilter] = useState(EMPTY_FILTER);
+  // Type is one list shown as two: Assets and Peripherals (its "used for").
+  const [typeView, setTypeView] = useState(TYPE_VIEWS[0].key);
 
   const active = (selected === NOTIFY_TAB && !isSuperadmin ? null : selected)
     || categories[0]?.key || null;
   const spec = categories.find((c) => c.key === active) || null;
   const parentOf = (c) => SUB_LISTS[c.key]
     || (c.classification ? categories.find((o) => o.field === c.field && o.classification)?.key : null);
-  const tabLabel = (c) => (c.classification ? `${c.field[0].toUpperCase()}${c.field.slice(1)}s` : c.plural);
+  const tabLabel = (c) => (c.key === 'type' ? c.label
+    : c.classification ? `${c.field[0].toUpperCase()}${c.field.slice(1)}s` : c.plural);
   const subLabel = (c) => (c.classification ? registerOf(c.classification).label : c.plural);
   const tabCategories = categories.filter((c) => !parentOf(c) || parentOf(c) === c.key);
   const activeTab = (spec && parentOf(spec)) || active;
@@ -177,7 +185,15 @@ const MasterDataPage = ({ initialTab = null }) => {
   };
 
   const isTypes = active === 'type';
-  const colCount = isTypes ? 5 : 3;
+  const view = TYPE_VIEWS.find((v) => v.key === typeView) || TYPE_VIEWS[0];
+  // "Shared" (linked to several assets at once) is a peripheral setting.
+  const showShared = isTypes && view.key === 'peripheral';
+  const colCount = isTypes ? (showShared ? 5 : 4) : 3;
+  const listRows = useMemo(
+    () => (isTypes ? rows.filter((r) => inTypeView(r, view.key)) : rows),
+    [rows, isTypes, view.key],
+  );
+  const listLabel = isTypes ? `${view.one} Type` : (spec?.label || 'Value');
 
   const filterFields = useMemo(() => [
     { key: 'name', label: spec?.label || 'Value', search: true, get: (r) => r.name },
@@ -191,20 +207,20 @@ const MasterDataPage = ({ initialTab = null }) => {
       key: 'used', label: 'In use', get: (r) => ((r.inUse || 0) > 0 ? 'used' : 'unused'),
       options: [{ value: 'used', label: 'Used by records' }, { value: 'unused', label: 'Not used' }],
     },
-    ...(isTypes ? [{
+    ...(showShared ? [{
       key: 'shared', label: 'Shared', get: (r) => (r.isShared ? 'shared' : 'single'),
       options: [{ value: 'shared', label: 'Several assets' }, { value: 'single', label: 'One at a time' }],
     }] : []),
-  ], [spec?.label, isTypes]);
+  ], [spec?.label, isTypes, showShared]);
 
   const shown = useMemo(
-    () => applyFieldFilter(rows, filter, filterFields, masterHaystack),
-    [rows, filter, filterFields],
+    () => applyFieldFilter(listRows, filter, filterFields, masterHaystack),
+    [listRows, filter, filterFields],
   );
   const searching = isFiltering(filter);
 
-  const activeCount = rows.filter((r) => r.isActive).length;
-  const retiredCount = rows.length - activeCount;
+  const activeCount = listRows.filter((r) => r.isActive).length;
+  const retiredCount = listRows.length - activeCount;
 
   return (
     <div className="page-scroll">
@@ -297,15 +313,37 @@ const MasterDataPage = ({ initialTab = null }) => {
                     ))}
                   </div>
                 )}
+                {isTypes && (
+                  <div className="master-sublists" role="tablist" aria-label="Type lists">
+                    {TYPE_VIEWS.map((v) => (
+                      <button
+                        key={v.key}
+                        type="button"
+                        role="tab"
+                        aria-selected={v.key === view.key}
+                        className={`master-sublist${v.key === view.key ? ' active' : ''}`}
+                        onClick={() => { setTypeView(v.key); setFilter(EMPTY_FILTER); }}
+                      >
+                        {v.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {isTypes && (
+                  <p className="master-type-note">
+                    A type cannot be edited once added. To change one, delete it and add it again — a
+                    type still used by records cannot be deleted, so retire it and add the new one.
+                  </p>
+                )}
                 <FieldFilterBar
-                  key={active}
+                  key={isTypes ? `${active}-${view.key}` : active}
                   fields={filterFields}
                   value={filter}
                   onChange={setFilter}
-                  allPlaceholder={`Search ${spec?.plural?.toLowerCase() || 'values'}…`}
+                  allPlaceholder={`Search ${isTypes ? `${view.one.toLowerCase()} types` : (spec?.plural?.toLowerCase() || 'values')}…`}
                 >
                   <span className="master-meta">
-                    {searching && `${shown.length.toLocaleString('en-IN')} of ${rows.length.toLocaleString('en-IN')} — `}
+                    {searching && `${shown.length.toLocaleString('en-IN')} of ${listRows.length.toLocaleString('en-IN')} — `}
                     {activeCount.toLocaleString('en-IN')} active
                     {retiredCount > 0 && `, ${retiredCount.toLocaleString('en-IN')} retired`}
                   </span>
@@ -314,7 +352,7 @@ const MasterDataPage = ({ initialTab = null }) => {
                       <ListPlus size={14} /> Bulk Add
                     </button>
                     <button type="button" className="btn-primary master-create-btn" onClick={openCreate}>
-                      <Plus size={14} /> New {spec?.label || 'Value'}
+                      <Plus size={14} /> New {listLabel}
                     </button>
                   </div>
                 </FieldFilterBar>
@@ -323,14 +361,14 @@ const MasterDataPage = ({ initialTab = null }) => {
                   <table className="data-table">
                     <thead>
                       <tr>
-                        <th>{spec?.label || 'Value'}</th>
+                        <th>{listLabel}</th>
                         {isTypes && (
                           <th title="Starts the ID of every new asset or peripheral of this type, e.g. LAP_00001">
                             Abbreviation
                           </th>
                         )}
                         <th>Description</th>
-                        {isTypes && <th>Shared</th>}
+                        {showShared && <th>Shared</th>}
                         <th>Actions</th>
                       </tr>
                     </thead>
@@ -338,10 +376,10 @@ const MasterDataPage = ({ initialTab = null }) => {
                       {loading && (
                         <tr><td className="table-empty" colSpan={colCount}>Loading&hellip;</td></tr>
                       )}
-                      {!loading && rows.length === 0 && (
+                      {!loading && listRows.length === 0 && (
                         <tr><td className="table-empty" colSpan={colCount}>No values yet.</td></tr>
                       )}
-                      {!loading && rows.length > 0 && shown.length === 0 && (
+                      {!loading && listRows.length > 0 && shown.length === 0 && (
                         <tr>
                           <td className="table-empty" colSpan={colCount}>
                             Nothing matches {filter.query.trim()
@@ -354,7 +392,14 @@ const MasterDataPage = ({ initialTab = null }) => {
                       )}
                       {!loading && shown.map((row) => (
                         <tr key={row.id} className={row.isActive ? undefined : 'row-retired'}>
-                          <td>{row.name}</td>
+                          <td>
+                            {row.name}
+                            {isTypes && (!row.usedFor || row.usedFor === 'both') && (
+                              <span className="master-both-tag" title={`Offered for ${view.other} too`}>
+                                also {view.other}
+                              </span>
+                            )}
+                          </td>
                           {isTypes && (
                             <td>
                               {row.code
@@ -363,7 +408,7 @@ const MasterDataPage = ({ initialTab = null }) => {
                             </td>
                           )}
                           <td className="master-desc">{row.description || ''}</td>
-                          {isTypes && (
+                          {showShared && (
                             <td>
                               <label className="master-shared" title={row.isShared
                                 ? `A ${row.name} can be linked to several assets at once.`
@@ -380,15 +425,17 @@ const MasterDataPage = ({ initialTab = null }) => {
                             </td>
                           )}
                           <td className="actions-cell">
-                            <button
-                              type="button"
-                              className="icon-btn"
-                              title="Edit"
-                              aria-label="Edit"
-                              onClick={() => openEdit(row)}
-                            >
-                              <Pencil size={13} />
-                            </button>
+                            {!isTypes && (
+                              <button
+                                type="button"
+                                className="icon-btn"
+                                title="Edit"
+                                aria-label="Edit"
+                                onClick={() => openEdit(row)}
+                              >
+                                <Pencil size={13} />
+                              </button>
+                            )}
                             <button
                               type="button"
                               className="icon-btn"
@@ -427,8 +474,9 @@ const MasterDataPage = ({ initialTab = null }) => {
         {modalOpen && spec && (
           <MasterOptionModal
             category={spec.key}
-            label={spec.label}
-            option={modalOption}
+            label={listLabel}
+            option={isTypes ? null : modalOption}
+            typeView={isTypes ? view : null}
             onClose={() => { setModalOpen(false); setModalOption(null); }}
             onSaved={handleSaved}
           />
@@ -437,8 +485,9 @@ const MasterDataPage = ({ initialTab = null }) => {
         {bulkOpen && spec && (
           <MasterBulkAdd
             category={spec.key}
-            label={spec.label}
-            plural={spec.plural}
+            label={listLabel}
+            plural={isTypes ? `${view.one} Types` : spec.plural}
+            extra={isTypes ? { usedFor: view.key } : null}
             existingNames={existingNames}
             onClose={() => setBulkOpen(false)}
             onDone={handleBulkDone}
